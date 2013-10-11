@@ -1,0 +1,12 @@
+{application, extend104,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { extend104_app, []}},
+  {env, []}
+ ]}.

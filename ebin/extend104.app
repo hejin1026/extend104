@@ -1,0 +1,9 @@
+{application,extend104,
+             [{description,[]},
+              {vsn,"1"},
+              {registered,[]},
+              {applications,[kernel,stdlib]},
+              {mod,{extend104_app,[]}},
+              {env,[]},
+              {modules,[extend104,extend104_app,extend104_frame,
+                        extend104_sup]}]}.
