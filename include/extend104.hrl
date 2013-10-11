@@ -1,7 +1,7 @@
 
--define(APCI_I, 16#00).
--define(APCI_S, 16#01).
--define(APCI_U, 16#03).
+%-define(APCI_I, 16#00).
+%-define(APCI_S, 16#01).
+%-define(APCI_U, 16#03).
 
 %function code
 -define(FUN_CODE_GLB,	255).		% 全局功能类型
