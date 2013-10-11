@@ -7,7 +7,7 @@
 
 %FIXME: badlength
 parse(<<16#68, L, C1, C2, C3, C4, Payload/binary>>) ->
-	{ok, #extend104_frame{length=L, c1=C1, c2=C2, c3=C3, c4=C4, payload=Payload}};
+	{ok, #extend104_frame{length=L-4, c1=C1, c2=C2, c3=C3, c4=C4, payload=Payload}};
 	
 parse(Bad) ->
 	{error, {badframe, Bad}}.
