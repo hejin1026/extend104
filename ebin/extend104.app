@@ -5,5 +5,5 @@
               {applications,[kernel,stdlib]},
               {mod,{extend104_app,[]}},
               {env,[]},
-              {modules,[extend104,extend104_app,extend104_frame,
-                        extend104_sup]}]}.
+              {modules,[extend104,extend104_app,extend104_bak,extend104_frame,
+                        extend104_sup,extend104_util,test_cmd]}]}.
