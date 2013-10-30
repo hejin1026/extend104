@@ -2,8 +2,12 @@
              [{description,[]},
               {vsn,"1"},
               {registered,[]},
-              {applications,[kernel,stdlib]},
+              {applications,[kernel,stdlib,cowboy]},
               {mod,{extend104_app,[]}},
               {env,[]},
-              {modules,[extend104,extend104_app,extend104_bak,extend104_frame,
-                        extend104_sup,extend104_util,test_cmd]}]}.
+              {modules,[extend104,extend104_app,extend104_cb_test,
+                        extend104_connection,extend104_connection_sup,
+                        extend104_frame,extend104_httpd,extend104_httpd_bak,
+                        extend104_httpd_cb,extend104_log,extend104_log_bak,
+                        extend104_sup,extend104_util,extend104_websocket,
+                        reloader,test_cmd]}]}.
