@@ -32,13 +32,18 @@ websocket_init(_TransportName, Req, _Opts) ->
 	{ok, Req, #state{}}.
 
 websocket_handle({text, <<"connection:", ConnConf/binary>>}, Req, #state{conn_pid=CP} = State) ->
-	case extend104:get_conn_pid(parse_conn(ConnConf)) of
-		{ok, ConnPid} ->
-			extend104_connection:subscribe(ConnPid, self()),
-			{reply, {text, << "begin to recv frame form ", ConnConf/binary >>}, Req, State#state{conn_pid = [ConnPid|CP]}};
-		error ->
-			{reply, {text, << "can not find connection ", ConnConf/binary >>}, Req, State}
-	end;				
+	try parse_conn(ConnConf) of
+		{ok, Oid} ->
+			case extend104:get_conn_pid(Oid) of
+				{ok, ConnPid} ->
+					extend104_connection:subscribe(ConnPid, self()),
+					{reply, {text, << "begin to recv frame form ", ConnConf/binary >>}, Req, State#state{conn_pid = [ConnPid|CP]}};
+				error ->
+					{reply, {text, << "can not find connection ", ConnConf/binary >>}, Req, State}
+			end
+	catch _:_ERROR ->
+		{reply, {text, << "connection info format: ip/port">>}, Req, State}
+	end;							
 websocket_handle({text, <<Msg/binary>>}, Req, State) ->
 	{reply, {text, <<"unsupport msg:", Msg/binary>>}, Req, State};
 websocket_handle(_Data, Req, State) ->
@@ -56,10 +61,10 @@ websocket_info(_Info, Req, State) ->
 
 websocket_terminate(_Reason, _Req, #state{conn_pid=CP}) ->
 	?INFO("game over :~p",[self()]),
-	[extend104:unsubscribe(ConnPid, self())||ConnPid <- CP],
+	[extend104_connection:unsubscribe(ConnPid, self())||ConnPid <- CP],
 	ok.
 
 parse_conn(ConnConf) ->
 	[Ip, Port|_] = binary:split(ConnConf, <<"/">>),
-	#extend104_oid{ip=Ip, port=Port}.
+	{ok, #extend104_oid{ip=Ip, port=binary_to_integer(Port)} }.
 	

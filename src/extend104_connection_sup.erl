@@ -9,15 +9,15 @@
 
 -behaviour(supervisor).
 
--export([start_link/0, start_connection/1]).
+-export([start_link/0, start_connection/2]).
 -export([init/1]).
 	
 	
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
-start_connection(ConnectionParams) ->
-    supervisor:start_child(?MODULE, [ConnectionParams]).	
+start_connection(Sup, ConnectionParams) ->
+    supervisor:start_child(Sup, [ConnectionParams]).	
 
 init([]) ->
     {ok, {{simple_one_for_one, 0, 1},

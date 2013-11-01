@@ -69,7 +69,7 @@ code_change(_OldVsn, State, _Extra) ->
 get_oid(ConnConf) ->
 	Ip = proplists:get_value(ip, ConnConf),	
 	Port = proplists:get_value(port, ConnConf),
-	#extend104_oid{ip=Ip, port=Port}.
+	#extend104_oid{ip=extbif:to_binary(Ip), port=Port}.
 	
 	
 	

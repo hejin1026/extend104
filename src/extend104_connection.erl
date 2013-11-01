@@ -37,10 +37,10 @@
 
 -define(TIMEOUT, 8000).
 
--record(state, {host, port, sock,rest= <<>>, subscriber = []}).
+-record(state, {host, port, sock,rest= <<>>, subscriber = [], timer}).
 
 start_link(Args) ->
-	gen_fsm:start_link({local, ?MODULE}, ?MODULE, [Args], []).
+	gen_fsm:start_link(?MODULE, [Args], []).
 
 status(C) when is_pid(C) ->
 	gen_fsm:sync_send_all_state_event(C, status).	
@@ -57,7 +57,7 @@ unsubscribe(C, SPid) ->
 
 init([Args]) ->
 	?INFO("~p", [Args]),
-	Host = proplists:get_value(host, Args),
+	Host = proplists:get_value(ip, Args),
 	Port = proplists:get_value(port, Args),
 	put(recv_c,0),
 	put(send_c,0),
@@ -124,10 +124,14 @@ disconnected(Event, State) ->
 	{next_state, discconnected, State}.
 
 
-handle_info({tcp, _Sock, Data}, connected, #state{rest=Rest}=State) ->
+handle_info({tcp, _Sock, Data}, connected, #state{rest=Rest, timer=LastTimer}=State) ->
 	?INFO("get msg lenth:~p, ~p",[size(Data), Data]),
 	NewRest = check_frame(list_to_binary([Rest, Data]), State),
-    {next_state, connected, State#state{rest=NewRest}};
+	if LastTimer == undefined -> ok;
+		true -> erlang:cancel_timer(LastTimer)
+	end,	
+	Timer = erlang:start_timer(20000, self(), heartbeat),
+    {next_state, connected, State#state{rest=NewRest, timer = Timer}};
 
 handle_info({tcp_closed, Sock}, connected, State=#state{sock=Sock}) ->
 	?ERROR_MSG("tcp closed."),
@@ -135,6 +139,10 @@ handle_info({tcp_closed, Sock}, connected, State=#state{sock=Sock}) ->
 
 handle_info({timeout, reconnect}, connecting, S) ->
     connect(S);
+
+handle_info({timeout, _Timer, heartbeat}, connected, State) ->
+	send_frame(?FRAME_TESTFR_SEND, State),
+    {next_state, connected, State};
 
 handle_info(_Info, StateName, State) ->
     {next_state, StateName, State}.
