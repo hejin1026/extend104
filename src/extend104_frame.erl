@@ -9,9 +9,13 @@
 %%%----------------------------------------------------------------------
 -module(extend104_frame).
 
+-include("extend104.hrl").
+
 -include("extend104_frame.hrl").
 
 -include_lib("elog/include/elog.hrl").
+
+-import(extend104_util, [reverse_byte_value/1, reverse_byte_value2/1]).
 
 -export([parse/1,
 		serialise/1,
@@ -28,11 +32,20 @@ serialise(Frame) when is_record(Frame, extend104_frame) ->
 							
 process_asdu(Frame = #extend104_frame{payload = <<>>}) ->
 	?ERROR("empty ~p", [Frame]);
-
 process_asdu(#extend104_frame{payload = <<Type,SQ:1,VSQ:7,COT:8,_COT:1/binary,Addr:2/binary,Data/binary>>}) ->
 	ASDU = #extend104_asdu{type=Type, sq=SQ, vsq=VSQ, cot=COT, addr=extend104_util:reverse_byte(Addr), data=Data},
-	process_asdu(Type, ASDU).
-
+	case process_asdu(Type, ASDU) of
+		ok -> ok;
+		{datalist, DataList} ->
+			?INFO("get asdu:~p,data length:~p, ~n ~p", [ASDU#extend104_asdu{data= <<>>}, length(DataList), DataList]),
+			DataList1 = lists:map(fun({PAddr, Value}) ->
+				MeasId = #measure_id{type=Type, no=reverse_byte_value(PAddr)},
+				#measure{id= MeasId, station_no=VSQ, cot=COT, value = Value}
+			end, DataList),
+			{measure, DataList1}
+	end.
+	
+			
 % 初始化结束
 process_asdu(?M_EI_NA_1, _ASDU) ->
 	?INFO_MSG("sub station reset!");
@@ -57,22 +70,15 @@ process_asdu(?C_CS_NA_1, #extend104_asdu{cot= ?M_COT_ACTCON_1} = ASDU) ->
 
 % 1:单点NA
 process_asdu(?M_SP_NA_1, ASDU) ->
-	?INFO_MSG("recv M_SP_NA_1 frame"),
-	DataList = process_M_SP_NA(ASDU),
-	?INFO("get 1 asdu:~p,data length:~p, ~n ~p", [ASDU#extend104_asdu{data= <<>>}, length(DataList), DataList]);
-
-% 9:测量值--归一化值
-process_asdu(?M_ME_NA_1, ASDU) ->
-	process_M_ME_NA(ASDU);
+	process_M_SP_NA(ASDU);
+	
 % 11:测量值--标度化值，与归一化相同处理
 process_asdu(?M_ME_NB_1, ASDU) ->
-	DataList = process_M_ME_NA(ASDU),
-	?INFO("get 11 asdu:~p,data length:~p, ~n ~p", [ASDU#extend104_asdu{data= <<>>}, length(DataList), DataList]);
+	process_M_ME_NA(ASDU);
 	
 % 15:电能脉冲计数量帧
 process_asdu(?M_IT_NA_1, ASDU) -> 
-	DataList = process_M_IT_NA(ASDU),
-	?INFO("get 15 asdu:~p,data length:~p, ~n ~p", [ASDU#extend104_asdu{data= <<>>}, length(DataList), DataList]);
+	process_M_IT_NA(ASDU);
 
 process_asdu(Type, Payload) ->
 	?ERROR("Unexepected ASDU: {~p, ~p}", [Type, Payload]).
@@ -83,61 +89,44 @@ process_asdu(Type, Payload) ->
 
 % 1：M_SP_NA_1 遥信
 process_M_SP_NA(#extend104_asdu{sq=0, data=Data}) ->
-	process_M_SP_NA_0(Data, []);
+	process_M_SP_NA(0, Data, []);
 process_M_SP_NA(#extend104_asdu{sq=1, data = <<PAddr:3/binary,Other/binary>>}) ->
 	RPAddr = extend104_util:reverse_byte(PAddr),	
-	[{RPAddr, process_M_SP_NA_1(Other, [])}].
+	[{RPAddr, process_M_SP_NA(1, Other, [])}].
 
-process_M_SP_NA_0(<<>>, Acc) ->
-	Acc;
-process_M_SP_NA_0(<<PAddr:3/binary, IV:1, NT:1, SB:1,BL:1,SPI:4,Other/binary>>, Acc) ->
-	RPAddr = extend104_util:reverse_byte(PAddr),	
+% content
+process_M_SP_NA(_SQ, <<>>, Acc) ->
+	{datalist, Acc};
+process_M_SP_NA(0, <<PAddr:3/binary, IV:1, NT:1, SB:1,BL:1,SPI:4,Other/binary>>, Acc) ->
 	% ?INFO("get addr:~p,info :~p", [RPAddr, {IV,NT,SB,BL,SPI}]),
-	process_M_SP_NA_0(Other, [{RPAddr, {IV,NT,SB,BL,SPI}}|Acc]).
-			
-process_M_SP_NA_1(<<>>, Acc) ->	
-	Acc;	
-process_M_SP_NA_1(<<IV:1, NT:1, SB:1,BL:1,SPI:4,Other/binary>>, Acc) ->
+	process_M_SP_NA(0, Other, [{PAddr, {IV,NT,SB,BL,SPI}}|Acc]);
+process_M_SP_NA(1, <<IV:1, NT:1, SB:1,BL:1,SPI:4,Other/binary>>, Acc) ->
 	% ?INFO("get info :~p", [{IV,NT,SB,BL,SPI}]),
-	process_M_SP_NA_1(Other, [{IV,NT,SB,BL,SPI}|Acc]).
+	process_M_SP_NA(1, Other, [{IV,NT,SB,BL,SPI}|Acc]).
 
 
 % 11：M_ME_NA_1 遥测
 process_M_ME_NA(#extend104_asdu{sq=0, data=Data}) ->
-	process_M_ME_NA_0(Data, []);
+	process_M_ME_NA(0, Data, []);
 process_M_ME_NA(#extend104_asdu{sq=1, data = <<PAddr:3/binary,Other/binary>>}) ->
-	RPAddr = extend104_util:reverse_byte(PAddr),	
-	[{RPAddr, process_M_ME_NA_1(Other, [])}].
+	[{PAddr, process_M_ME_NA(1, Other, [])}].
 	
-process_M_ME_NA_0(<<>>, Acc) ->
-	Acc;
-process_M_ME_NA_0(<<PAddr:3/binary, Value:2/binary, IV:1, NT:1, SB:1,BL:1,OV:4,Other/binary>>, Acc) ->
-	RPAddr = extend104_util:reverse_byte(PAddr),	
-	% ?INFO("get addr:~p,info :~p", [RPAddr, {Value,IV,NT,SB,BL,OV}]),
-	process_M_ME_NA_0(Other, [{RPAddr, {Value,IV,NT,SB,BL,OV}}|Acc]).	
-	
-process_M_ME_NA_1(<<>>, Acc) ->
-	Acc;		
-process_M_ME_NA_1(<<Value:2/binary, IV:1, NT:1, SB:1,BL:1,OV:4,Other/binary>>, Acc) ->
-	% ?INFO("get info :~p", [{Value,IV,NT,SB,BL,OV}]),
-	process_M_ME_NA_1(Other, [{Value,IV,NT,SB,BL,OV}|Acc]).
+process_M_ME_NA(_SQ, <<>>, Acc) ->
+	{datalist, Acc};
+process_M_ME_NA(0, <<PAddr:3/binary, Value:2/binary, IV:1, NT:1, SB:1,BL:1,OV:4,Other/binary>>, Acc) ->
+	process_M_ME_NA(0, Other, [{PAddr, {reverse_byte_value2(Value),IV,NT,SB,BL,OV}}|Acc]);
+process_M_ME_NA(1, <<Value:2/binary, IV:1, NT:1, SB:1,BL:1,OV:4,Other/binary>>, Acc) ->
+	process_M_ME_NA(1, Other, [{reverse_byte_value2(Value),IV,NT,SB,BL,OV}|Acc]).
 
 % 15：M_IT_NA_1	计数量
 process_M_IT_NA(#extend104_asdu{sq=0, data=Data}) ->
-	process_M_IT_NA_0(Data, []);
+	process_M_IT_NA(0, Data, []);
 process_M_IT_NA(#extend104_asdu{sq=1, data = <<PAddr:3/binary,Other/binary>>}) ->
-	RPAddr = extend104_util:reverse_byte(PAddr),	
-	[{RPAddr, process_M_IT_NA_1(Other, [])}].
+	[{PAddr, process_M_IT_NA(1, Other, [])}].
 	
-process_M_IT_NA_0(<<>>, Acc) ->
-	Acc;
-process_M_IT_NA_0(<<PAddr:3/binary, Value:4/binary, IV:1, CA:1, CY:1,SQ:5,Other/binary>>, Acc) ->
-	RPAddr = extend104_util:reverse_byte(PAddr),	
-	% ?INFO("get addr:~p,info :~p", [RPAddr, {Value,IV,CA,CY,SQ}]),
-	process_M_IT_NA_0(Other, [{RPAddr, {Value,IV,CA,CY,SQ}}|Acc]).	
-	
-process_M_IT_NA_1(<<>>, Acc) ->
-	Acc;		
-process_M_IT_NA_1(<<Value:4/binary, IV:1, CA:1, CY:1,SQ:5,Other/binary>>, Acc) ->
-	% ?INFO("get info :~p", [{Value,IV,CA,CY,SQ}]),
-	process_M_IT_NA_1(Other, [{Value,IV,CA,CY,SQ}|Acc]).	
+process_M_IT_NA(_, <<>>, Acc) ->
+	{datalist, Acc};
+process_M_IT_NA(0, <<PAddr:3/binary, Value:4/binary, IV:1, CA:1, CY:1,SQ:5,Other/binary>>, Acc) ->
+	process_M_IT_NA(0, Other, [{PAddr, {reverse_byte_value(Value),IV,CA,CY,SQ}}|Acc]);
+process_M_IT_NA(1, <<Value:4/binary, IV:1, CA:1, CY:1,SQ:5,Other/binary>>, Acc) ->
+	process_M_IT_NA(1, Other, [{reverse_byte_value(Value),IV,CA,CY,SQ}|Acc]).	

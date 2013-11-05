@@ -52,10 +52,10 @@ handle_call(Req, _From, State) ->
     ?WARNING("unexpect request: ~p", [Req]),
     {reply, {error, {invalid_request, Req}}, State}.
 	
-handle_cast(Msg, State) ->
+handle_cast(_Msg, State) ->
 	{noreply, State}.
 	
-handle_info(Msg ,State) ->
+handle_info(_Msg ,State) ->
 	{noreply, State}.
 				
 

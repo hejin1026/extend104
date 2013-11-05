@@ -2,7 +2,24 @@
 
 -create("hejin 2013-10-18").
 
--export([reverse_byte/1, add_cn/1, bin_to_str/2]).
+-export([reverse_byte_value/1, reverse_byte_value2/1, reverse_byte/1, add_cn/1, bin_to_str/2, to_string/1]).
+
+-export([b2a/1]).
+
+reverse_byte_value(Bin) ->
+	BitLen = size(Bin) * 8,
+	<<V:BitLen>> = reverse_byte(Bin),
+	V.
+
+reverse_byte_value2(Bin) ->
+	BitLen = size(Bin) * 8,
+	Data = <<V:BitLen>> = reverse_byte(Bin),
+	<<T:1,_:7, _/binary>> = Data,
+	if T==1 ->
+		V - (1 bsl BitLen);
+	true -> 
+		V
+	end.	
 
 reverse_byte(Bin) ->
 	reverse_byte(Bin, []).
@@ -31,8 +48,11 @@ zeropad(I) when length(I) == 1 ->
 zeropad(I) ->
     I.	
 
+b2a(Binary) ->
+  list_to_atom(binary_to_list(Binary)).
 	
-	
+to_string(T)  ->
+    lists:flatten(io_lib:format("~p", [T])).	
 	
 	
 	

@@ -10,7 +10,8 @@
 		status/1,
 		send/2,
 		subscribe/2,
-		unsubscribe/2
+		unsubscribe/2,
+		get_measure/2
 		]).
 
 -behavior(gen_fsm).
@@ -54,6 +55,9 @@ subscribe(C, SPid) ->
 	
 unsubscribe(C, SPid) ->
 	gen_fsm:sync_send_event(C, {unsubscribe,SPid}).		
+	
+get_measure(C, Measure) ->
+	gen_fsm:sync_send_event(C, {get_measure, Measure}).	
 
 init([Args]) ->
 	?INFO("~p", [Args]),
@@ -63,6 +67,7 @@ init([Args]) ->
 	put(send_c,0),
 	put(ser_send_cn,{0,0}),
 	put(ser_recv_cn,{0,0}),
+	ets:new(extend104_measure, [ordered_set, named_table, {keypos, #measure.id}]),
 	{ok, connecting, #state{host=Host, port=Port}, 0}.
 
 connecting(timeout, State) ->
@@ -114,6 +119,15 @@ connected({subscribe, SPid}, _From, #state{subscriber=Subs}=State) ->
 	{reply, ok, connected, State#state{subscriber=[SPid|Subs]}};	
 connected({unsubscribe, SPid}, _From, #state{subscriber=Subs}=State) ->
 	{reply, ok, connected, State#state{subscriber=[SP||SP <- Subs, SP =/= SPid]}};		
+connected({get_measure, MeaType}, _From, State) ->
+	Meas = case MeaType of
+		'$_' ->
+			ets:tab2list(extend104_measure);
+		_ ->	
+			ets:match_object(extend104_measure, 
+				#measure{id= #measure_id{type=binary_to_integer(MeaType),no='_'}, station_no='_', cot='_',value='_'})
+	end,			
+	{reply, {ok, Meas}, connected, State};	
 connected(_Event, _From, State) ->
     {reply, {error, badevent}, connected, State}.
 
@@ -225,7 +239,11 @@ process_apci_i(Frame, State) ->
 	put(ser_send_cn, {Frame#extend104_frame.c1, Frame#extend104_frame.c2}),	
 	put(ser_recv_cn, {Frame#extend104_frame.c3, Frame#extend104_frame.c4}),
 	confirm_frame(State),
-	extend104_frame:process_asdu(Frame).
+	case extend104_frame:process_asdu(Frame) of
+		ok -> ok;
+		{measure, DataList} ->
+			[ets:insert(extend104_measure, Meas)|| Meas <- DataList]
+	end.		
 			
 process_apci_s(Frame) ->
 	?INFO("get apci_s :~p",[Frame]).
