@@ -79,7 +79,31 @@ process_asdu(?M_ME_NB_1, ASDU) ->
 % 15:电能脉冲计数量帧
 process_asdu(?M_IT_NA_1, ASDU) -> 
 	process_M_IT_NA(ASDU);
-
+	
+process_asdu(130, #extend104_asdu{sq=0, data= <<RecordType, Rest>>}) -> 
+	process_130(RecordType, Rest);
+	
+process_asdu(131, #extend104_asdu{sq=0, data= <<No:17/binary, FaultType:16, ActionType, CurrTime:7/binary>>}) -> 
+	?INFO("get info:~p",[{No, FaultType, ActionType, CurrTime}]),
+	{data, []};		
+	
+process_asdu(132, #extend104_asdu{sq=0, data= <<DY:16,SOC:16,WD:16,CountWD:16,CountDC:16,Rest>>}) -> 
+	{DataWD, Rest2} = process_132(CountWD, Rest, []),
+	{DataDY, _} = process_132(CountWD, Rest, []),
+	{data, []};
+	
+process_asdu(133, #extend104_asdu{sq=0, data= <<Status:16, Fault>>}) -> 
+	{data, []};				
+	
+process_asdu(134, #extend104_asdu{sq=0, data= <<ZDL:32, FDL:32>>}) -> 
+	{data, []};					
+	
+process_asdu(135, #extend104_asdu{sq=0}) -> 
+	{data, []};	
+	
+process_asdu(136, ASDU) -> 
+	{data, []};				
+						
 process_asdu(Type, Payload) ->
 	?ERROR("Unexepected ASDU: {~p, ~p}", [Type, Payload]).
 
@@ -130,3 +154,21 @@ process_M_IT_NA(0, <<PAddr:3/binary, Value:4/binary, IV:1, CA:1, CY:1,SQ:5,Other
 	process_M_IT_NA(0, Other, [{PAddr, {reverse_byte_value(Value),IV,CA,CY,SQ}}|Acc]);
 process_M_IT_NA(1, <<Value:4/binary, IV:1, CA:1, CY:1,SQ:5,Other/binary>>, Acc) ->
 	process_M_IT_NA(1, Other, [{reverse_byte_value(Value),IV,CA,CY,SQ}|Acc]).	
+
+% 130	
+process_130(1, <<StakeType,SerialNo:19/binary,StakeNo:17/binary,CardNo:4/binary, Begin:7/binary,CDType,
+				DCType, DY:16,DL:16,Mode, ModeArgs:4/binary, YK, YKJE:32, ZDD:32>>) ->
+	{data, []};
+process_130(2, <<StakeType,SerialNo:19/binary,StakeNo:17/binary,CardNo:4/binary, Begin:7/binary,End:7/binary,CDType,
+				DCType, DY:16,DL:16,Mode,ModeArgs:4/binary, Reason, JDJ:32,JDL:32,JJE:32,FDJ:32,FDL:32,FJE:32,
+				PDJ:32,PDL:32,PJE:32,GDJ:32,GDL:32,ZDL:32,ZDD:32>>) ->
+	{data, []};
+process_130(3, <<StakeType,SerialNo:19/binary,StakeNo:17/binary,CardNo:4/binary, Begin:7/binary,End:7/binary,
+				Checkout:7/binary, CostDL:32, CostJE:32>>) ->
+	{data, []}.				
+
+process_132(0, Rest, Acc) ->
+	{Acc, lists:reverse(Rest)};		
+process_132(Count, <<Data:16,Rest>>, Acc) ->
+	process_132(Count - 1, Rest, [Data|Acc]).		
+	

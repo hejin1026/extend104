@@ -45,7 +45,8 @@ handle(Req, <<"GET">>, <<"/measure">>, Params, State) ->
 	case extend104:get_conn_pid(ConnOid) of
 	{ok, ConnPid} -> 
 		MeaType = proplists:get_value(measure_type, Params, '$_'),
-		{ok, Meas} = extend104_connection:get_measure(ConnPid, MeaType),
+		MeaNo = proplists:get_value(measure_no, Params, '_'),
+		{ok, Meas} = extend104_connection:get_measure(ConnPid, {MeaType, MeaNo}),
 		?INFO("get meas:~p", [Meas]),
 		{ok, Reply} = cowboy_req:reply(200, [{"Content-Type", "text/plain"}], format(Meas), Req), 
 		{ok, Reply, State};

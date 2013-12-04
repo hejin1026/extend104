@@ -119,13 +119,13 @@ connected({subscribe, SPid}, _From, #state{subscriber=Subs}=State) ->
 	{reply, ok, connected, State#state{subscriber=[SPid|Subs]}};	
 connected({unsubscribe, SPid}, _From, #state{subscriber=Subs}=State) ->
 	{reply, ok, connected, State#state{subscriber=[SP||SP <- Subs, SP =/= SPid]}};		
-connected({get_measure, MeaType}, _From, State) ->
+connected({get_measure, {MeaType, MeaNo}}, _From, State) ->
 	Meas = case MeaType of
 		'$_' ->
 			ets:tab2list(extend104_measure);
 		_ ->	
 			ets:match_object(extend104_measure, 
-				#measure{id= #measure_id{type=binary_to_integer(MeaType),no='_'}, station_no='_', cot='_',value='_'})
+				#measure{id= #measure_id{type=binary_to_integer(MeaType),no=binary_to_integer(MeaNo)}, station_no='_', cot='_',value='_'})
 	end,			
 	{reply, {ok, Meas}, connected, State};	
 connected(_Event, _From, State) ->

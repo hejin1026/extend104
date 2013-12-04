@@ -31,7 +31,7 @@ websocket_init(_TransportName, Req, _Opts) ->
 	erlang:start_timer(2000, self(), <<"Hello!Send Req First...">>),
 	{ok, Req, #state{}}.
 
-websocket_handle({text, <<"connection:", ConnConf/binary>>}, Req, #state{conn_pid=CP} = State) ->
+websocket_handle({text, <<"connection/", ConnConf/binary>>}, Req, #state{conn_pid=CP} = State) ->
 	try parse_conn(ConnConf) of
 		{ok, Oid} ->
 			case extend104:get_conn_pid(Oid) of
@@ -41,8 +41,9 @@ websocket_handle({text, <<"connection:", ConnConf/binary>>}, Req, #state{conn_pi
 				error ->
 					{reply, {text, << "can not find connection ", ConnConf/binary >>}, Req, State}
 			end
-	catch _:_ERROR ->
-		{reply, {text, << "connection info format: ip/port">>}, Req, State}
+	catch _:Error ->
+		?ERROR("get conn error:~p", [Error]),
+		{reply, {text, << "connection info format ip:port">>}, Req, State}
 	end;							
 websocket_handle({text, <<Msg/binary>>}, Req, State) ->
 	{reply, {text, <<"unsupport msg:", Msg/binary>>}, Req, State};
@@ -65,6 +66,6 @@ websocket_terminate(_Reason, _Req, #state{conn_pid=CP}) ->
 	ok.
 
 parse_conn(ConnConf) ->
-	[Ip, Port|_] = binary:split(ConnConf, <<"/">>),
+	[Ip, Port|_] = binary:split(ConnConf, <<":">>),
 	{ok, #extend104_oid{ip=Ip, port=binary_to_integer(Port)} }.
 	
