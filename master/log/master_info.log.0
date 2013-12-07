@@ -1,0 +1,46 @@
+2013-12-06 17:06:18.112 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-06 17:18:11.452 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-06 17:24:48.017 [notice] <0.75.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-06 17:26:40.477 [notice] <0.75.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-06 17:32:31.277 [notice] <0.75.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-06 19:04:43.596 [notice] <0.75.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-06 19:06:06.033 [error] <0.141.0>@term:boot_load_step:49 begin to load station
+2013-12-06 19:06:06.033 [error] <0.141.0>@term:boot_load_step:58 end with load station, loading station channel
+2013-12-06 19:07:41.214 [error] <0.141.0>@term:boot_load_step:49 begin to load station
+2013-12-06 19:07:41.214 [error] <0.141.0>@term:boot_load_step:58 end with load station, loading station channel
+2013-12-06 19:07:41.216 [error] <0.141.0>@term_station:load:21 finish term_station: 2 
+2013-12-06 19:07:41.217 [error] <0.141.0>@term:boot_load_step:49 begin to load stake
+2013-12-06 19:07:41.217 [error] <0.141.0>@term:boot_load_step:58 end with load stake, loading stake channel
+2013-12-06 19:07:41.218 [error] <0.141.0>@term_stake:load:21 finish term_stake: 2 
+2013-12-06 19:07:41.330 [notice] <0.75.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-06 19:09:43.969 [error] <0.141.0>@term:boot_load_step:49 begin to load station
+2013-12-06 19:09:43.969 [error] <0.141.0>@term:boot_load_step:58 end with load station, loading station channel
+2013-12-06 19:09:43.970 [error] <0.141.0>@term_station:load:21 finish term_station: 2 
+2013-12-06 19:09:43.970 [error] <0.141.0>@term:boot_load_step:49 begin to load stake
+2013-12-06 19:09:43.970 [error] <0.141.0>@term:boot_load_step:58 end with load stake, loading stake channel
+2013-12-06 19:09:43.971 [error] <0.141.0>@term_stake:load:21 finish term_stake: 2 
+2013-12-06 19:09:44.095 [notice] <0.75.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-06 20:06:53.657 [info] <0.165.0>@master_ctl:run:23 begin to dispatch 2 entries...
+2013-12-06 20:06:53.664 [error] <0.165.0>@master_ctl:run:28 dispatch error: undef
+2013-12-06 20:43:13.243 [error] <0.110.0>@master:handle_info:68 get reply :{add,{node_id,"common",'extend104@hejintekiMacBook-Air'}}
+2013-12-06 21:03:19.036 [error] <0.141.0>@term:boot_load_step:57 begin to load station
+2013-12-06 21:03:19.036 [error] <0.141.0>@term:boot_load_step:66 end with load station, loading station channel
+2013-12-06 21:03:19.037 [error] <0.141.0>@term_station:load:21 finish term_station: 2 
+2013-12-06 21:03:19.038 [error] <0.141.0>@term:boot_load_step:57 begin to load stake
+2013-12-06 21:03:19.038 [error] <0.141.0>@term:boot_load_step:66 end with load stake, loading stake channel
+2013-12-06 21:03:19.039 [error] <0.141.0>@term_stake:load:21 finish term_stake: 2 
+2013-12-06 21:03:19.084 [notice] <0.75.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-06 21:03:27.032 [error] <0.110.0>@master:handle_info:68 get reply :{add,{node_id,"common",'extend104@hejintekiMacBook-Air'}}
+2013-12-06 21:04:00.398 [info] <0.143.0>@master_ctl:run:23 begin to dispatch 2 entries...
+2013-12-06 21:04:00.398 [info] <0.143.0>@master_ctl:run:26 undefined dispatched, done.
+2013-12-06 21:05:09.326 [error] <0.141.0>@term:boot_load_step:57 begin to load station
+2013-12-06 21:05:09.326 [error] <0.141.0>@term:boot_load_step:66 end with load station, loading station channel
+2013-12-06 21:05:09.328 [error] <0.141.0>@term_station:load:21 finish term_station: 2 
+2013-12-06 21:05:09.328 [error] <0.141.0>@term:boot_load_step:57 begin to load stake
+2013-12-06 21:05:09.328 [error] <0.141.0>@term:boot_load_step:66 end with load stake, loading stake channel
+2013-12-06 21:05:09.329 [error] <0.141.0>@term_stake:load:21 finish term_stake: 2 
+2013-12-06 21:05:09.425 [notice] <0.75.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-06 21:06:03.743 [info] <0.143.0>@master_ctl:run:23 begin to dispatch 2 entries...
+2013-12-06 21:06:03.743 [info] <0.143.0>@master_ctl:run:26 undefined dispatched, done.
+2013-12-06 21:06:03.749 [error] <0.125.0>@master:get_one_nodeid:101 no node id {node_id,"undefined"}
+2013-12-06 21:06:03.749 [error] <0.125.0>@master:get_one_nodeid:101 no node id {node_id,"undefined"}

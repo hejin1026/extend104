@@ -1,0 +1,27 @@
+2013-12-07 01:12:06.719 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 01:32:52.744 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 01:36:02.877 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 11:00:45.021 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 11:02:02.442 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 11:43:27.256 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 11:47:09.616 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 11:51:09.943 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 11:51:57.188 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 11:54:21.677 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 13:16:25.461 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 13:20:04.211 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 13:23:12.872 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 13:30:19.245 [info] <0.216.0>@extend104_monitor:init:27 extend104_monitor is starting...
+2013-12-07 13:30:19.371 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 13:30:51.863 [info] <0.233.0>@extend104_connection:init:63 [{station_id,1},{channel_type,0},{transmit_type,1},{protocol_id,1},{port,2406},{ip,<<"10.140.205.180">>},{name,<<228,184,180,230,178,130,231,132,166,229,186,132,229,133,133,231,148,181,231,171,153,233,128,154,233,129,147,45,228,184,187>>},{id,2}]
+2013-12-07 13:30:51.866 [info] <0.234.0>@extend104_connection:init:63 [{station_id,2},{channel_type,0},{transmit_type,1},{protocol_id,1},{port,2404},{ip,<<"192.168.27.61">>},{name,<<230,181,139,232,175,149,231,171,153,95,99>>},{id,1}]
+2013-12-07 13:58:12.373 [info] <0.216.0>@extend104_monitor:init:27 extend104_monitor is starting...
+2013-12-07 13:58:12.479 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 14:01:49.324 [info] <0.233.0>@extend104_connection:init:63 conn info:[{station_id,1},{channel_type,0},{transmit_type,1},{protocol_id,1},{port,2406},{ip,<<"10.140.205.180">>},{name,<<228,184,180,230,178,130,231,132,166,229,186,132,229,133,133,231,148,181,231,171,153,233,128,154,233,129,147,45,228,184,187>>},{id,2}]
+2013-12-07 14:01:49.328 [info] <0.234.0>@extend104_connection:init:63 conn info:[{station_id,2},{channel_type,0},{transmit_type,1},{protocol_id,1},{port,2404},{ip,<<"192.168.27.61">>},{name,<<230,181,139,232,175,149,231,171,153,95,99>>},{id,1}]
+2013-12-07 17:10:35.615 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 17:10:35.747 [info] <0.216.0>@extend104_monitor:init:27 extend104_monitor is starting...
+2013-12-07 17:15:09.829 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 17:15:09.928 [info] <0.216.0>@extend104_monitor:init:27 extend104_monitor is starting...
+2013-12-07 17:15:30.626 [notice] <0.59.0>@lager_app:132 Deprecated lager_file_backend config detected, please consider updating it
+2013-12-07 17:15:30.839 [info] <0.116.0>@extend104_monitor:init:27 extend104_monitor is starting...

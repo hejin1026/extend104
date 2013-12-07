@@ -1,0 +1,12 @@
+{application, master,
+ [
+  {description, "master server"},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { master_app, []}},
+  {env, []}
+ ]}.

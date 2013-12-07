@@ -1,0 +1,10 @@
+#! /bin/bash
+ROOTDIR=`cd $(dirname $0); pwd`
+NODE_NAME="master"
+CONFIG_PATH="$ROOTDIR/etc/${NODE_NAME}"
+
+export ERL_LIBS=../lib
+erl -sname $NODE_NAME -pa ebin -config $CONFIG_PATH \
+	-boot start_sasl \
+    -s master_app start
+

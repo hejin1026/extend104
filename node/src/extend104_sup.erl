@@ -4,7 +4,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/0]).
+-export([start_link/1]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -18,7 +18,7 @@
 %% API functions
 %% ===================================================================
 
-start_link() ->
+start_link(CityId) ->
     {ok, Sup} = supervisor:start_link({local, ?MODULE}, ?MODULE, []),
 	%% Httpd config
 	{ok, HttpdConf} = application:get_env(httpd), 
@@ -28,9 +28,12 @@ start_link() ->
     ConnectionSub = {extend104_connection_sup, {extend104_connection_sup, start_link, []},
         	temporary, infinity , supervisor, [extend104_connection_sup]},
     {ok, ConnSup} = supervisor:start_child(Sup, ConnectionSub),
-    Extend104 = {extend104, {extend104, start_link, [ConnSup]},
+    Extend104 = {extend104, {extend104, start_link, [CityId, ConnSup]},
 			permanent, 10, worker, [extend104]},
     supervisor:start_child(Sup, Extend104),
+    Monitor = {extend104_monitor, {extend104_monitor, start_link, [CityId]},
+			permanent, 10, worker, [extend104_monitor]},
+	supervisor:start_child(Sup, Monitor),
 	{ok, Sup}.
 
 %% ===================================================================

@@ -1,0 +1,16 @@
+#! /bin/bash
+ROOTDIR=`cd $(dirname $0); pwd`
+NODE_NAME="node"
+CONFIG_PATH="$ROOTDIR/etc/${NODE_NAME}"
+
+if [ $# -eq 1 ]; then
+    NODE_NAME=$1
+fi
+
+export ERL_LIBS=../lib
+erl -sname $NODE_NAME \
+    -pa ebin -config $CONFIG_PATH \
+	-boot start_sasl \
+    -cityid common \
+    -s extend104_app start -s reloader start
+

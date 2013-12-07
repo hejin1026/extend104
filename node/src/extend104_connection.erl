@@ -38,7 +38,7 @@
 
 -define(TIMEOUT, 8000).
 
--record(state, {host, port, sock,rest= <<>>, subscriber = [], timer}).
+-record(state, {host, port, sock, ets, rest= <<>>, subscriber = [], timer}).
 
 start_link(Args) ->
 	gen_fsm:start_link(?MODULE, [Args], []).
@@ -60,15 +60,15 @@ get_measure(C, Measure) ->
 	gen_fsm:sync_send_event(C, {get_measure, Measure}).	
 
 init([Args]) ->
-	?INFO("~p", [Args]),
+	?INFO("conn info:~p", [Args]),
 	Host = proplists:get_value(ip, Args),
 	Port = proplists:get_value(port, Args),
 	put(recv_c,0),
 	put(send_c,0),
 	put(ser_send_cn,{0,0}),
 	put(ser_recv_cn,{0,0}),
-	ets:new(extend104_measure, [ordered_set, named_table, {keypos, #measure.id}]),
-	{ok, connecting, #state{host=Host, port=Port}, 0}.
+	EtsTb = ets:new(extend104_measure, [ordered_set, {keypos, #measure.id}]),
+	{ok, connecting, #state{host=Host, port=Port,ets=EtsTb}, 0}.
 
 connecting(timeout, State) ->
     connect(State);
@@ -119,12 +119,12 @@ connected({subscribe, SPid}, _From, #state{subscriber=Subs}=State) ->
 	{reply, ok, connected, State#state{subscriber=[SPid|Subs]}};	
 connected({unsubscribe, SPid}, _From, #state{subscriber=Subs}=State) ->
 	{reply, ok, connected, State#state{subscriber=[SP||SP <- Subs, SP =/= SPid]}};		
-connected({get_measure, {MeaType, MeaNo}}, _From, State) ->
+connected({get_measure, {MeaType, MeaNo}}, _From, #state{ets=ETB}=State) ->
 	Meas = case MeaType of
 		'$_' ->
-			ets:tab2list(extend104_measure);
+			ets:tab2list(ETB);
 		_ ->	
-			ets:match_object(extend104_measure, 
+			ets:match_object(ETB, 
 				#measure{id= #measure_id{type=binary_to_integer(MeaType),no=binary_to_integer(MeaNo)}, station_no='_', cot='_',value='_'})
 	end,			
 	{reply, {ok, Meas}, connected, State};	
@@ -235,14 +235,14 @@ process_frame(#extend104_frame{c1 = C1} = Frame, State) ->
 		?ERROR("unsupport apci....~p", [Frame])
 	end.
 
-process_apci_i(Frame, State) ->
+process_apci_i(Frame, #state{ets=ETB}=State) ->
 	put(ser_send_cn, {Frame#extend104_frame.c1, Frame#extend104_frame.c2}),	
 	put(ser_recv_cn, {Frame#extend104_frame.c3, Frame#extend104_frame.c4}),
 	confirm_frame(State),
 	case extend104_frame:process_asdu(Frame) of
 		ok -> ok;
 		{measure, DataList} ->
-			[ets:insert(extend104_measure, Meas)|| Meas <- DataList]
+			[ets:insert(ETB, Meas)|| Meas <- DataList]
 	end.		
 			
 process_apci_s(Frame) ->

@@ -14,22 +14,18 @@
 
 start() ->
 	io:format("start extend104..."),
-	ok = application:start(crypto),
-	ok = application:start(lager),
-	ok = application:start(ranch),
-	ok = application:start(cowlib),
-	ok = application:start(cowboy),
-	ok = application:start(extend104).
+	[start_app(App) || App <- [crypto, lager, amqp_client, ranch, cowlib, cowboy, extend104] ].
+
+start_app(App) ->
+    ok = application:start(App).
 	
 stop() ->
-    application:stop(extend104), 
-    application:stop(lager),
-	application:stop(ranch),
-    application:stop(crypto).	
+	[application:stop(App) || App <- lists:reverse([crypto, lager, amqp_client, ranch, cowlib, cowboy, extend104])].
 	
 
 start(_StartType, _StartArgs) ->
-    extend104_sup:start_link().
+	{ok, [[CityId]]} = init:get_argument(cityid),
+    extend104_sup:start_link(CityId).
 
 stop(_State) ->
     ok.

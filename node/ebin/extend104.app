@@ -1,0 +1,12 @@
+{application,extend104,
+             [{description,[]},
+              {vsn,"1"},
+              {registered,[]},
+              {applications,[kernel,stdlib,cowboy]},
+              {mod,{extend104_app,[]}},
+              {env,[]},
+              {modules,[extend104,extend104_app,extend104_connection,
+                        extend104_connection_sup,extend104_frame,
+                        extend104_http,extend104_httpd,extend104_monitor,
+                        extend104_sup,extend104_util,extend104_websocket,
+                        reloader]}]}.
