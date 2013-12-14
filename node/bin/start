@@ -1,0 +1,26 @@
+#!/bin/bash
+# rm log/* -f
+RUNNER_SCRIPT_DIR=$(cd ${0%/*} && pwd)
+RUNNER_BASE_DIR=${RUNNER_SCRIPT_DIR%/*}
+RUNNER_ETC_DIR=$RUNNER_BASE_DIR/etc
+VMARGS_PATH="$RUNNER_ETC_DIR/node.args"
+
+# Extract the target node name from node.args
+NODE_NAME=node
+
+# Extract the target cookie
+NODE_NUM=`grep '^-num' $VMARGS_PATH|awk '{print $2}'`
+if [ -z "$NODE_NUM" ]; then
+    echo "args needs to have a -setcookie parameter."
+    exit 1
+fi
+echo "num:$NODE_NUM"
+
+for (( i =0; i < $NODE_NUM; i++ ))
+do
+    echo "starting $NODE_NAME${i}..."
+    $RUNNER_SCRIPT_DIR/node -sname $NODE_NAME${i} start
+done
+
+
+
