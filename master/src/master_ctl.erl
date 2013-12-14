@@ -7,7 +7,7 @@
 -include_lib("elog/include/elog.hrl").
 -include("terminl.hrl").
 
--export([run/0]).
+-compile(export_all).
 
 run() ->
 	Dispatch = fun(Cid) ->
@@ -28,3 +28,12 @@ run() ->
 		end
 	end).
 
+status() ->
+    {InternalStatus, _ProvidedStatus} = init:get_status(),
+    ?PRINT("Node ~p is ~p.", [node(), InternalStatus]),
+    case lists:keysearch(master, 1, application:which_applications()) of
+	false ->
+		?PRINT_MSG("master is not running~n");
+	{value,_Version} ->
+		?PRINT_MSG("master is running~n")
+    end.

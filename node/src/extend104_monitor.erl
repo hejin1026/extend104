@@ -20,11 +20,11 @@
 start_link(Opts) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Opts], []).
 
-
 init([CityId]) ->
     {ok, Conn} = amqp:connect(),
     Channel = open(Conn, CityId),
 	?INFO("~p is starting...", [?MODULE]),
+	ets:new(cid_tb, [set, named_table]),
 	{ok, #state{channel = Channel}}.
 
 open(Conn, CityId) ->
@@ -55,20 +55,44 @@ handle_cast(Msg, State) ->
 
 
 handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} = State) ->
-    % ?INFO("get from quene :~p", [binary_to_list(RoutingKey)]),
+    ?INFO("get from quene :~p,~p", [RoutingKey, binary_to_term(Payload)]),
     case binary_to_term(Payload) of
-        {monitor, Cid, Data} -> % CityId
+        {monitor, Cid, Data} -> % By CityId Queue
             Node = {monitored, Cid, get_monet_query()},
             amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Node)),
             extend104:open_conn(Data);
         {unmonitor, Cid} ->
             % unmonitor(Dn);
 			ok;
+		{subscribe, Cid} -> % by node queue
+			case ets:member(cid_tb, Cid) of
+				true ->
+					ok;
+				false ->	
+					case extend104:get_conn_pid(Cid) of
+						{ok, ConnPid} ->
+							extend104_connection:subscribe(ConnPid, self()),
+							ets:insert(cid_tb, {Cid, ConnPid});
+						error ->
+							{error, no_conn}
+					end	
+			end;
+		{unsubscribe, Cid} ->
+			case ets:lookup(cid_tb, Cid) of
+				[] ->
+					{error, no_subscribe};
+				[{Cid, ConnPid}] ->
+					extend104_connection:unsubscribe(ConnPid, self()),
+					ets:delete(cid_tb, Cid)
+			end;						
         _ ->
-            ignore
+            ok
     end,
     {noreply, State};
 
+handle_info({frame, Cid, {Type, Time, Frame}} = Payload, #state{channel = Channel} = State) ->
+	amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Payload)),
+	{noreply, State};
 
 handle_info({'EXIT', Pid, Reason}, State) ->
 	?ERROR("~p monitor exited: ~p,~p", [Pid, node(Pid), Reason]),
@@ -80,6 +104,7 @@ handle_info(Info, State) ->
 
 
 terminate(_Reason, _State) ->
+	?ERROR("~p terminate", [?MODULE]),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->

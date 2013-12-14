@@ -9,7 +9,9 @@
 -include_lib("elog/include/elog.hrl").
 
 -export([start_link/0,
-		dispatch/1
+		dispatch/1,
+		subscribe/2,
+		unsubscribe/2
 		]).
 
 -export([init/1, 
@@ -28,6 +30,12 @@
 dispatch(Payload) ->
 	gen_server2:cast(?MODULE, {dispatch, Payload}).
 	
+subscribe(Cid, WebSocket) ->
+	gen_server2:call(?MODULE, {subscribe, Cid, WebSocket}).	
+	
+unsubscribe(Cid, WebSocket) ->
+	gen_server2:call(?MODULE, {unsubscribe, Cid, WebSocket}).		
+	
 start_link() ->
     gen_server2:start_link({local, ?MODULE}, ?MODULE, [], []).
 		
@@ -36,6 +44,7 @@ init([]) ->
     Channel = open(Conn),
     mnesia:create_table(dispatch, [{ram_copies, [node()]},
         {attributes, record_info(fields, dispatch)}]),
+	ets:new(cid_tb, [bag, named_table]),	
     {ok, #state{channel = Channel}}.
 
 open(Conn) ->
@@ -43,8 +52,39 @@ open(Conn) ->
     amqp:queue(Channel, <<"monitor.reply">>),
     amqp:consume(Channel, <<"monitor.reply">>, self()),
     Channel.
-		
+	
+handle_call({subscribe, Cid, WebSocket}, _From, #state{channel=Channel}=State) ->
+    Reply = case mnesia:dirty_read(dispatch, {monitor, Cid}) of
+        [] ->
+            {error, {no_dispatch, Cid}};
+        [#dispatch{node = undefined}] ->
+			{error, {no_monitored, Cid}};
+        [#dispatch{node = Node}] ->
+            amqp:send(Channel, Node, term_to_binary({subscribe, Cid})),
+			ets:insert(cid_tb, {Cid, WebSocket}),
+			ok
+    end,
+	{reply, Reply, State};		
 
+handle_call({unsubscribe, Cid, WebSocket}, _From, #state{channel=Channel}=State) ->
+    Reply = case ets:lookup(cid_tb, Cid) of
+        [] ->
+            {error, no_subscribe};
+        [{Cid, WebSocket}] ->
+			case mnesia:dirty_read(dispatch, {monitor, Cid}) of
+		        [] ->
+		            {error, {no_dispatch, Cid}};
+		        [#dispatch{node = undefined}] ->
+					{error, {no_monitored, Cid}};
+		        [#dispatch{node = Node}] ->
+		            amqp:send(Channel, Node, term_to_binary({unsubscribe, Cid})),
+					ets:delete(cid_tb, Cid)
+		    end;
+		_WSPid ->
+			ets:delete_object(cid_tb, {Cid, WebSocket})	
+    end,
+	{reply, Reply, State};			
+	
 handle_call(Msg, _From, State) ->
 	{reply, ok, State}.
 	
@@ -95,5 +135,19 @@ handle_reply({monitored, Cid, Node}, _State) ->
         [] ->
             ?ERROR("unexpected reply: ~p", [{monitored, Cid}])
     end;
+handle_reply({frame, Cid, {Type, Time, Frame}}, #state{channel=Channel}=State) ->
+	case ets:lookup(cid_tb, Cid) of
+		[] ->
+			case mnesia:dirty_read(dispatch, {monitor, Cid}) of
+		        [] ->
+		            {error, {no_dispatch, Cid}};
+		        [#dispatch{node = undefined}] ->
+					{error, {no_monitored, Cid}};
+		        [#dispatch{node = Node}] ->
+		            amqp:send(Channel, Node, term_to_binary({unsubscribe, Cid}))
+		    end;
+		WSPid ->
+			[Pid ! {frame, Type, Time, Frame} || Pid <- WSPid]
+	end;			
 handle_reply(_Reply, _State) ->
     ok.		

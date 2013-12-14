@@ -10,6 +10,7 @@
 
 -export([start/2, stop/1]).
 
+-define(APP, [crypto, mnesia, lager, ranch, cowlib, cowboy, emysql, amqp_client, master] ).
 
 %% ===================================================================
 %% Application callbacks
@@ -17,13 +18,13 @@
 
 start() ->
 	io:format("start extend104..."),
-	[start_app(App) || App <- [crypto, mnesia, lager, emysql, amqp_client, master] ].
+	[start_app(App) || App <- ?APP].
 	
 start_app(App) ->
     ok = application:start(App).	
 	
 stop() ->
-	stop_app([master, amqp_client, emysql, lager, mnesia, crypto]).
+	[start_app(App) || App <- lists:reverse(?APP)].
 
 stop_app(App) ->
 	ok = application:stop(App).	

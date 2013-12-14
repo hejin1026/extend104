@@ -20,11 +20,11 @@
 
 start_link(CityId) ->
     {ok, Sup} = supervisor:start_link({local, ?MODULE}, ?MODULE, []),
-	%% Httpd config
-	{ok, HttpdConf} = application:get_env(httpd), 
-    HttpdCowBoy = {extend104_httpd, {extend104_httpd, start, [HttpdConf]},
-			permanent, 10, worker, [extend104_httpd]},
-	supervisor:start_child(Sup, HttpdCowBoy),	   
+	%% Httpd config	% 
+	% {ok, HttpdConf} = application:get_env(httpd), 
+	%     HttpdCowBoy = {extend104_httpd, {extend104_httpd, start, [HttpdConf]},
+	% 		permanent, 10, worker, [extend104_httpd]},
+	% supervisor:start_child(Sup, HttpdCowBoy),	   
     ConnectionSub = {extend104_connection_sup, {extend104_connection_sup, start_link, []},
         	temporary, infinity , supervisor, [extend104_connection_sup]},
     {ok, ConnSup} = supervisor:start_child(Sup, ConnectionSub),

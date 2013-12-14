@@ -19,7 +19,7 @@
         terminate/2]).
 
 
--record(state, {cityid, channel, connection_sup, map_oid_pid = dict:new()}).
+-record(state, {cityid, channel, connection_sup, map_oid_pid = dict:new(), map_cid_pid = dict:new()}).
 
 start_link(CityId, ConnectionSup) ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [CityId, ConnectionSup], []).
@@ -51,11 +51,13 @@ get_node_queue() ->
     [NodeName|_] = string:tokens(atom_to_list(node()), "@"),
     NodeName ++ ".node".	
 	
-handle_connect(ConnConf, #state{connection_sup = ConnSup, map_oid_pid=MapOP} = State) ->
+handle_connect(ConnConf, #state{connection_sup = ConnSup, map_oid_pid=MapOP, map_cid_pid=MapCP} = State) ->
     case extend104_connection_sup:start_connection(ConnSup, ConnConf) of
         {ok, ConnPid} ->
             Oid = get_oid(ConnConf), 
-			{reply, {ok, ConnPid}, State#state{map_oid_pid=dict:store(Oid, ConnPid, MapOP)}};
+			Cid = get_cid(ConnConf),
+			{reply, {ok, ConnPid}, State#state{map_oid_pid=dict:store(Oid, ConnPid, MapOP), 
+					map_cid_pid=dict:store(Cid, ConnPid, MapCP)}};
         {error, Error} ->
             ?ERROR("get conn error: ~p, ~p", [Error, ConnConf]),
 			{reply, {error, Error}, State}
@@ -64,8 +66,10 @@ handle_connect(ConnConf, #state{connection_sup = ConnSup, map_oid_pid=MapOP} = S
 	
 handle_call({open_conn, ConnConf}, _From, State) ->
 	handle_connect(ConnConf, State);	
-handle_call({get_conn_pid, Oid}, _From, #state{map_oid_pid = MapOP} = State) ->
+handle_call({get_conn_pid, Oid}, _From, #state{map_oid_pid = MapOP} = State) when is_record(Oid, extend104_oid)->
 	{reply, dict:find(Oid, MapOP), State};	
+handle_call({get_conn_pid, Cid}, _From, #state{map_cid_pid = MapCP} = State) ->
+	{reply, dict:find(Cid, MapCP), State};		
 handle_call(Req, _From, State) ->
     ?WARNING("unexpect request: ~p", [Req]),
     {reply, {error, {invalid_request, Req}}, State}.
@@ -91,6 +95,9 @@ get_oid(ConnConf) ->
 	Port = proplists:get_value(port, ConnConf),
 	#extend104_oid{ip=extbif:to_binary(Ip), port=Port}.
 	
-	
+get_cid(ConnConf) ->
+	Cid = proplists:get_value(id, ConnConf),
+	Cid.
+		
 	
 	

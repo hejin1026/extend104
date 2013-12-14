@@ -10,8 +10,7 @@
 		status/1,
 		send/2,
 		subscribe/2,
-		unsubscribe/2,
-		get_measure/2
+		unsubscribe/2
 		]).
 
 -behavior(gen_fsm).
@@ -38,7 +37,9 @@
 
 -define(TIMEOUT, 8000).
 
--record(state, {host, port, sock, ets, rest= <<>>, subscriber = [], timer}).
+-record(state, {cid, host, port, sock, rest= <<>>, subscriber = [], timer}).
+
+-import(extbif, [to_list/1]).
 
 start_link(Args) ->
 	gen_fsm:start_link(?MODULE, [Args], []).
@@ -55,20 +56,18 @@ subscribe(C, SPid) ->
 	
 unsubscribe(C, SPid) ->
 	gen_fsm:sync_send_event(C, {unsubscribe,SPid}).		
-	
-get_measure(C, Measure) ->
-	gen_fsm:sync_send_event(C, {get_measure, Measure}).	
+
 
 init([Args]) ->
 	?INFO("conn info:~p", [Args]),
+	Cid = proplists:get_value(id, Args),
 	Host = proplists:get_value(ip, Args),
 	Port = proplists:get_value(port, Args),
 	put(recv_c,0),
 	put(send_c,0),
 	put(ser_send_cn,{0,0}),
 	put(ser_recv_cn,{0,0}),
-	EtsTb = ets:new(extend104_measure, [ordered_set, {keypos, #measure.id}]),
-	{ok, connecting, #state{host=Host, port=Port,ets=EtsTb}, 0}.
+	{ok, connecting, #state{cid=Cid, host=to_list(Host), port=Port}, 0}.
 
 connecting(timeout, State) ->
     connect(State);
@@ -79,7 +78,8 @@ connecting(_Event, _From, State) ->
     {reply, {error, connecting}, connecting, State}.
 
 connect(State = #state{host=Host, port=Port}) ->
-    case gen_tcp:connect(Host, Port, ?TCPOPTIONS) of %, ?TIMEOUT) of
+	?INFO("begin to conn", []),
+    case gen_tcp:connect(Host, Port, ?TCPOPTIONS, ?TIMEOUT) of 
     {ok, Sock} ->
 		?INFO("~p:~p is connected.", [Host, Port]),
         {next_state, connected, State#state{sock = Sock}};
@@ -119,15 +119,6 @@ connected({subscribe, SPid}, _From, #state{subscriber=Subs}=State) ->
 	{reply, ok, connected, State#state{subscriber=[SPid|Subs]}};	
 connected({unsubscribe, SPid}, _From, #state{subscriber=Subs}=State) ->
 	{reply, ok, connected, State#state{subscriber=[SP||SP <- Subs, SP =/= SPid]}};		
-connected({get_measure, {MeaType, MeaNo}}, _From, #state{ets=ETB}=State) ->
-	Meas = case MeaType of
-		'$_' ->
-			ets:tab2list(ETB);
-		_ ->	
-			ets:match_object(ETB, 
-				#measure{id= #measure_id{type=binary_to_integer(MeaType),no=binary_to_integer(MeaNo)}, station_no='_', cot='_',value='_'})
-	end,			
-	{reply, {ok, Meas}, connected, State};	
 connected(_Event, _From, State) ->
     {reply, {error, badevent}, connected, State}.
 
@@ -191,9 +182,9 @@ check_frame(Rest, _State) ->
 	?ERROR("get error msg:~p",[Rest]), 
 	<<>>.		
 	
-recv_frame(FrameData, #state{subscriber=Subs}=State) ->
+recv_frame(FrameData, #state{cid=Cid, subscriber=Subs}=State) ->
 	Frame = extend104_frame:parse(FrameData),
-	[SPid ! {frame, recv, calendar:local_time(), Frame} ||SPid <- Subs],
+	[SPid ! {frame, Cid, {recv, calendar:local_time(), Frame} } ||SPid <- Subs],
 	process_frame(Frame, State).	
 
 % send_cn is current = last s_recv_cn, recv_cn is next = last s_send_cn + 1
@@ -214,9 +205,9 @@ send_frame(Frame, State) ->
 		end,	
 	do_send_frame(SendFrame, State).
 	
-do_send_frame(Frame, #state{sock = Sock,subscriber=Subs}) when is_record(Frame, extend104_frame) ->
+do_send_frame(Frame, #state{cid=Cid, sock = Sock,subscriber=Subs}) when is_record(Frame, extend104_frame) ->
 	?INFO("send msg:~p", [extend104_frame:serialise(Frame)]),
-	[SPid ! {frame, send, calendar:local_time(), Frame} ||SPid <- Subs],
+	[SPid ! {frame, Cid, {send, calendar:local_time(), Frame}} ||SPid <- Subs],
     erlang:port_command(Sock, extend104_frame:serialise(Frame)).
 		
 
@@ -235,15 +226,19 @@ process_frame(#extend104_frame{c1 = C1} = Frame, State) ->
 		?ERROR("unsupport apci....~p", [Frame])
 	end.
 
-process_apci_i(Frame, #state{ets=ETB}=State) ->
+process_apci_i(Frame, State) ->
 	put(ser_send_cn, {Frame#extend104_frame.c1, Frame#extend104_frame.c2}),	
 	put(ser_recv_cn, {Frame#extend104_frame.c3, Frame#extend104_frame.c4}),
 	confirm_frame(State),
 	case extend104_frame:process_asdu(Frame) of
 		ok -> ok;
-		{measure, DataList} ->
-			[ets:insert(ETB, Meas)|| Meas <- DataList]
+		{measure, _DataList} =Payload ->
+			handle_data(Payload, State)
 	end.		
+
+handle_data({measure, DataList}, #state{cid=Cid}=State) ->
+	extend104_hub:send_datalog({measure, Cid, DataList}).
+	
 			
 process_apci_s(Frame) ->
 	?INFO("get apci_s :~p",[Frame]).
