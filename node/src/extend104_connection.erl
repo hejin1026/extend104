@@ -82,6 +82,7 @@ connect(State = #state{host=Host, port=Port}) ->
     case gen_tcp:connect(Host, Port, ?TCPOPTIONS, ?TIMEOUT) of 
     {ok, Sock} ->
 		?INFO("~p:~p is connected.", [Host, Port]),
+		send(self(), 'STARTDT'),
         {next_state, connected, State#state{sock = Sock}};
     {error, Reason} ->
 		?ERROR("failed to connect ~p:~p, error: ~p.", [Host, Port, Reason]),

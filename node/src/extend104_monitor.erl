@@ -24,7 +24,7 @@ init([CityId]) ->
     {ok, Conn} = amqp:connect(),
     Channel = open(Conn, CityId),
 	?INFO("~p is starting...", [?MODULE]),
-	ets:new(cid_tb, [set, named_table]),
+	ets:new(cid_wb, [set, named_table]),
 	{ok, #state{channel = Channel}}.
 
 open(Conn, CityId) ->
@@ -65,25 +65,25 @@ handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} =
             % unmonitor(Dn);
 			ok;
 		{subscribe, Cid} -> % by node queue
-			case ets:member(cid_tb, Cid) of
+			case ets:member(cid_wb, Cid) of
 				true ->
 					ok;
 				false ->	
 					case extend104:get_conn_pid(Cid) of
 						{ok, ConnPid} ->
 							extend104_connection:subscribe(ConnPid, self()),
-							ets:insert(cid_tb, {Cid, ConnPid});
+							ets:insert(cid_wb, {Cid, ConnPid});
 						error ->
 							{error, no_conn}
 					end	
 			end;
 		{unsubscribe, Cid} ->
-			case ets:lookup(cid_tb, Cid) of
+			case ets:lookup(cid_wb, Cid) of
 				[] ->
 					{error, no_subscribe};
 				[{Cid, ConnPid}] ->
 					extend104_connection:unsubscribe(ConnPid, self()),
-					ets:delete(cid_tb, Cid)
+					ets:delete(cid_wb, Cid)
 			end;						
         _ ->
             ok

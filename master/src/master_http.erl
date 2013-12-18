@@ -41,7 +41,7 @@ qsfun(<<"POST">>) ->
 handle(Req, <<"GET">>, <<"/measure">>, Params, State) ->
     Cid = proplists:get_value(id, Params),
 	MeaType = proplists:get_value(measure_type, Params, '$_'),
-	MeaNo = proplists:get_value(measure_no, Params, '_'),
+	MeaNo = proplists:get_value(measure_no, Params, '$_'),
 	{ok, Meas} = master_datalog:get_measure({Cid, MeaType, MeaNo}),
 	?INFO("get meas:~p", [Meas]),
 	{ok, Reply} = cowboy_req:reply(200, [{"Content-Type", "text/plain"}], format(Meas), Req), 

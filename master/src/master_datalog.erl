@@ -51,7 +51,7 @@ handle_call({get_measure, {Cid, MeaType, MeaNo}}, _From, State) ->
 				#measure{id= #measure_id{cid=binary_to_integer(Cid), type=binary_to_integer(MeaType),no=binary_to_integer(MeaNo)},
 					 station_no='_', cot='_',value='_'})
 	end,			
-	{reply, {ok, Meas}, connected, State};
+	{reply, {ok, Meas}, State};
 	
 handle_call(Msg, _From, State) ->
 	{reply, ok, State}.
@@ -61,7 +61,7 @@ handle_cast(Msg, State) ->
 	{noreply, State}.
 	
 handle_info({deliver, <<"measure.datalog">>, _Properties, Payload}, State) ->
-    ?INFO("get monitor reply :~p", [binary_to_term(Payload)]),
+    ?INFO("get monitor datalog :~p", [binary_to_term(Payload)]),
     handle_reply(binary_to_term(Payload), State),
     {noreply, State};
 	

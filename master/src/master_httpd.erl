@@ -23,7 +23,7 @@ start(Opts) ->
 				{file, <<"index.html">>},
 				{mimetypes, [{<<".html">>, [<<"text/html">>]}]}
 			]},
-			{"/measure", extend104_http, []},
+			{"/measure", master_http, []},
 			{"/static/[...]", cowboy_static, [
 				{directory, {priv_dir, App, [<<"static">>]}},
 				{mimetypes, [{<<".js">>, [<<"application/javascript">>]}]}
