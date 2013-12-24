@@ -39,7 +39,9 @@ init([]) ->
 open(Conn) ->
     {ok, Channel} = amqp:open_channel(Conn),
     amqp:queue(Channel, <<"measure.datalog">>),
+	amqp:queue(Channel, <<"server.datalog">>),
     amqp:consume(Channel, <<"measure.datalog">>, self()),
+	amqp:consume(Channel, <<"server.datalog">>, self()),
     Channel.
 
 handle_call({get_measure, {Cid, MeaType, MeaNo}}, _From, State) ->
@@ -62,8 +64,13 @@ handle_cast(Msg, State) ->
 	
 handle_info({deliver, <<"measure.datalog">>, _Properties, Payload}, State) ->
     ?INFO("get monitor datalog :~p", [binary_to_term(Payload)]),
-    handle_reply(binary_to_term(Payload), State),
+    handle_data(binary_to_term(Payload)),
     {noreply, State};
+
+handle_info({deliver, <<"server.datalog">>, _Properties, Payload}, State) ->
+    ?INFO("get server datalog :~p", [binary_to_term(Payload)]),
+    handle_datalist(binary_to_term(Payload)),
+    {noreply, State};	
 	
 handle_info(Msg, State) ->
 	?ERROR("unexpected info: ~p", [Msg]),
@@ -76,11 +83,20 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-handle_reply({measure, Cid, Datalist}, _State) ->
+handle_data({measure, Cid, Datalist}) ->
 	lists:foreach(fun(Meas) ->
 		MeasId = Meas#measure.id,
 		NewMeasId = MeasId#measure_id{cid=Cid},
 		ets:insert(extend104_measure, Meas#measure{id=NewMeasId})
 	end, Datalist);		
-handle_reply(_Reply, _State) ->
+handle_data({datalog, SID, Timestamp, Datalog}) ->
+	?INFO_MSG("need to do...");
+handle_data(_Reply) ->
     ok.		
+	
+handle_datalist([]) ->
+    over;
+handle_datalist([Datalog|Datalist]) ->
+    handle_data(Datalog),
+	handle_datalist(Datalist).
+		

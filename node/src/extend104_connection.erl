@@ -100,16 +100,19 @@ connected('STOPDT', State) ->
 	send_frame(?FRAME_STOPDT, State),
 	{next_state, connected, State};
 % 总召 100
-connected('C_IC_NA_1', State) ->
-	send_frame(?FRAME_C_IC_NA_1, State),
+connected('C_IC_NA_1', #state{cid=Cid}=State) ->
+	BCid = extend104_util:reverse_int_value(Cid),
+	send_frame(?FRAME_C_IC_NA_1(BCid), State),
 	{next_state, connected, State};
 % 计量总召 101
-connected('C_CI_NA_1', State) ->
-	send_frame(?FRAME_C_CI_NA_1, State),
+connected('C_CI_NA_1', #state{cid=Cid}=State) ->
+	BCid = extend104_util:reverse_int_value(Cid),
+	send_frame(?FRAME_C_CI_NA_1(BCid), State),
 	{next_state, connected, State};
 % 时钟同步 103
-connected('C_CS_NA_1', State) ->
-	send_frame(?FRAME_C_CS_NA_1, State),
+connected('C_CS_NA_1', #state{cid=Cid}=State) ->
+	BCid = extend104_util:reverse_int_value(Cid),
+	send_frame(?FRAME_C_CS_NA_1(BCid), State),
 	{next_state, connected, State};
 connected(Frame, State) ->
 	?ERROR("badevent: ~p", [Frame]),

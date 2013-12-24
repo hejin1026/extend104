@@ -33,9 +33,10 @@ init([]) ->
 	Matser = ?CHILD(master, worker),
 	Dist = ?CHILD(master_dist, worker),
 	Term = ?CHILD(term, worker),
+	TermAgent = ?CHILD(term_agent, worker),
 	{ok, HttpdConf} = application:get_env(httpd), 
     HttpdCowBoy = {master_httpd, {master_httpd, start, [HttpdConf]},
 			permanent, 10, worker, [master_httpd]},
 	Datalog = ?CHILD(master_datalog, worker),		
-    {ok, { {one_for_one, 5, 10}, [Matser, Dist, Term, HttpdCowBoy, Datalog]} }.
+    {ok, { {one_for_one, 5, 10}, [Matser, Dist, Term, TermAgent, HttpdCowBoy, Datalog]} }.
 

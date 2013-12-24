@@ -2,15 +2,25 @@
 
 -create("hejin 2013-10-18").
 
--export([reverse_byte_value/1, reverse_byte_value2/1, reverse_byte/1, add_cn/1, bin_to_str/2, to_string/1]).
+-export([reverse_int_value/1,reverse_byte_value/1, reverse_byte_value2/1, reverse_byte/1, 
+		add_cn/1, bin_to_str/2, to_string/1]).
 
 -export([b2a/1]).
 
+
+%int -> overturn byte
+reverse_int_value(Int) ->
+	Low = Int band 16#ff,
+	High = (Int bsr 8) band 16#ff,
+	<<Low, High>>. 
+
+%overturn byte -> int
 reverse_byte_value(Bin) ->
 	BitLen = size(Bin) * 8,
 	<<V:BitLen>> = reverse_byte(Bin),
 	V.
 
+%overturn byte -> +/- int
 reverse_byte_value2(Bin) ->
 	BitLen = size(Bin) * 8,
 	Data = <<V:BitLen>> = reverse_byte(Bin),

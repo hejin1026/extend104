@@ -1,0 +1,3 @@
+#!/bin/bash
+rm var/log/* -f
+./app_ctl start

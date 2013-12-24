@@ -25,11 +25,11 @@
 -define(FRAME_TESTFR_REPLY, #extend104_frame{c1=16#83}).
 
 %<<68, 16#0E, 00, 00, 06, 00, 64, 01, 06, 00, 01, 00, 00, 00, 00, 14>>),
--define(FRAME_C_IC_NA_1, #extend104_frame{payload = <<16#64, 01, 06, 00, 01, 00, 00, 00, 00, 16#14>>}).
+-define(FRAME_C_IC_NA_1(Cid), #extend104_frame{payload = <<16#64, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
 
--define(FRAME_C_CI_NA_1, #extend104_frame{payload = <<16#65, 01, 06, 00, 01, 00, 00, 00, 00, 16#14>>}).
+-define(FRAME_C_CI_NA_1(Cid), #extend104_frame{payload = <<16#65, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
 
--define(FRAME_C_CS_NA_1, #extend104_frame{payload = <<16#67, 01, 06, 00, 01, 00, 00, 00, 00, 16#14>>}).
+-define(FRAME_C_CS_NA_1(Cid), #extend104_frame{payload = <<16#67, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
 
 
 

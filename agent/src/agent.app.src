@@ -1,0 +1,8 @@
+{application, agent,
+ [{description, "agent"},
+  {vsn, "5.5.4"},
+  {modules, [agent, agent_sup, agent_app]},
+  {registered, [agent]},
+  {applications, [kernel, stdlib]},
+  {env, []},
+  {mod, {agent_app, []}}]}.

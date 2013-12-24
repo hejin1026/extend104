@@ -36,6 +36,8 @@ process_asdu(#extend104_frame{payload = <<Type,SQ:1,VSQ:7,COT:8,_COT:1/binary,Ad
 	ASDU = #extend104_asdu{type=Type, sq=SQ, vsq=VSQ, cot=COT, addr=extend104_util:reverse_byte(Addr), data=Data},
 	case process_asdu(Type, ASDU) of
 		ok -> ok;
+		{data, Data} ->
+			?INFO("get data:~p,~p", [Type, Data]);
 		{datalist, DataList} ->
 			?INFO("get asdu:~p,data length:~p, ~n ~p", [ASDU#extend104_asdu{data= <<>>}, length(DataList), DataList]),
 			DataList1 = lists:map(fun({PAddr, Value}) ->
@@ -98,11 +100,11 @@ process_asdu(133, #extend104_asdu{sq=0, data= <<Status:16, Fault>>}) ->
 process_asdu(134, #extend104_asdu{sq=0, data= <<ZDL:32, FDL:32>>}) -> 
 	{data, []};					
 	
-process_asdu(135, #extend104_asdu{sq=0}) -> 
-	{data, []};	
+process_asdu(135, #extend104_asdu{sq=0, data= <<No:17/binary, Rest>>}) -> 
+	process_135(Rest, []);
 	
-process_asdu(136, ASDU) -> 
-	{data, []};				
+process_asdu(136, #extend104_asdu{sq=0, data= <<RecordType, Rest>>}) -> 
+	process_136(RecordType, Rest);			
 						
 process_asdu(Type, Payload) ->
 	?ERROR("Unexepected ASDU: {~p, ~p}", [Type, Payload]).
@@ -171,4 +173,21 @@ process_132(0, Rest, Acc) ->
 	{Acc, lists:reverse(Rest)};		
 process_132(Count, <<Data:16,Rest>>, Acc) ->
 	process_132(Count - 1, Rest, [Data|Acc]).		
+	
+process_135(<<GetTime:4/binary>>, Acc) ->
+	{data, lists:reverse(Acc)};	
+process_135(<<CellNo:2/binary,DcxNo:18/binary,CdjNo:17/binary,Rest>>, Acc) ->
+	process_135(Rest,[{CellNo, DcxNo, CdjNo}|Acc]).
+	
+process_136(1, <<CardNO:16/binary,PW:8/binary,TM:4/binary>>) ->
+	{data, []};
+process_136(2, <<CardNO:16/binary,PW:8/binary,StakeNo:17/binary,DBZ:4/binary,DBF:4/binary,DBG:4/binary,
+				DBP:4/binary,TM:4/binary>>) ->
+	{data, []};	
+process_136(3, <<CardNO:16/binary,PW:8/binary,StakeNo:17/binary,DBZ:4/binary,DBF:4/binary,DBG:4/binary,
+				DBP:4/binary,TM:4/binary>>) ->
+	{data, []};		
+process_136(4, _) ->
+	{data, []}.	
+			
 	

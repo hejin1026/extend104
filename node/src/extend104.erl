@@ -5,7 +5,7 @@
 -include_lib("elog/include/elog.hrl").
 
 -export([start_link/2,
-		open_conn/1,
+		open_conn/1,delete_conn/1,sync/1,
 		get_conn_pid/1
 		]).
 
@@ -26,6 +26,12 @@ start_link(CityId, ConnectionSup) ->
 	
 open_conn(ConnConf) ->
 	gen_server:call(?MODULE, {open_conn, ConnConf}).	
+	
+delete_conn(Cid) ->
+	gen_server:call(?MODULE, {delete_conn, Cid}).	
+	
+sync(Cid) ->
+	gen_server:cast(?MODULE, {sync, Cid}).	
 	
 get_conn_pid(Oid) ->
 	gen_server:call(?MODULE, {get_conn_pid, Oid}).		
@@ -66,13 +72,30 @@ handle_connect(ConnConf, #state{connection_sup = ConnSup, map_oid_pid=MapOP, map
 	
 handle_call({open_conn, ConnConf}, _From, State) ->
 	handle_connect(ConnConf, State);	
+handle_call({delete_conn, Cid}, _From, #state{map_cid_pid = MapCP} = State) ->
+	ConnPid = dict:find(Cid, MapCP),
+	exit(ConnPid, "delete conn"),
+	{reply, ok, State};
+	
 handle_call({get_conn_pid, Oid}, _From, #state{map_oid_pid = MapOP} = State) when is_record(Oid, extend104_oid)->
 	{reply, dict:find(Oid, MapOP), State};	
 handle_call({get_conn_pid, Cid}, _From, #state{map_cid_pid = MapCP} = State) ->
 	{reply, dict:find(Cid, MapCP), State};		
+	
 handle_call(Req, _From, State) ->
     ?WARNING("unexpect request: ~p", [Req]),
     {reply, {error, {invalid_request, Req}}, State}.
+	
+handle_cast({sync, Cid}, #state{map_cid_pid = MapCP} = State) ->
+	case dict:find(Cid, MapCP) of
+		{ok, Conn} ->
+			extend104_connectin:send(Conn, 'C_IC_NA_1'),
+			extend104_connectin:send(Conn, 'C_CI_NA_1'),
+			extend104_connectin:send(Conn, 'C_CS_NA_1');
+		error ->
+			?ERROR("can not sync,no conn:~p", [Cid])
+	end,			
+	{noreply, State};
 	
 handle_cast(_Msg, State) ->
 	{noreply, State}.

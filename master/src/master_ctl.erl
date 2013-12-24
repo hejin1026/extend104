@@ -27,6 +27,21 @@ run() ->
 			_:Err -> ?ERROR("dispatch error: ~p", [Err])
 		end
 	end).
+	
+	
+sync() ->
+	Dispatch = fun(Cid) ->
+		master_dist:dispatch({sync, Cid})
+	end,
+	spawn(fun() -> 
+		AllCid = term:all_channel(),
+		?INFO("begin to dispatch ~p entries...", [length(AllCid)]),
+		try
+			lists:foreach(Dispatch, AllCid)
+		catch
+			_:Err -> ?ERROR("dispatch error: ~p", [Err])
+		end
+	end).	
 
 status() ->
     {InternalStatus, _ProvidedStatus} = init:get_status(),
@@ -37,3 +52,5 @@ status() ->
 	{value,_Version} ->
 		?PRINT_MSG("master is running~n")
     end.
+	
+	

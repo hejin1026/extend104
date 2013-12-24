@@ -61,9 +61,10 @@ handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} =
             Node = {monitored, Cid, get_monet_query()},
             amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Node)),
             extend104:open_conn(Data);
+		{sync, Cid} ->
+			extend104:sync(Cid);	
         {unmonitor, Cid} ->
-            % unmonitor(Dn);
-			ok;
+			extend104:delete(Cid);
 		{subscribe, Cid} -> % by node queue
 			case ets:member(cid_wb, Cid) of
 				true ->

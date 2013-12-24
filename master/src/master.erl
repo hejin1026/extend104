@@ -41,19 +41,6 @@ open(Conn) ->
     amqp:consume(Channel, <<"node.reply">>),
     Channel.
 
-
-handle_call({run, config}, _From, #state{channel = Channel} = State) ->
-    {ok, Tl1Infos} = emysql:select({tl1_ems_info, {respon, 1}}),
-    ?INFO("ems ...~p",[Tl1Infos]),
-    lists:foreach(fun(Tl1Info) ->
-        {value, CityId} = dataset:get_value(cityid, Tl1Info),
-        NodeIds = get_one_common(node_id) ++ get_one_group(node_id, to_list(CityId)),
-    	?INFO("node:~p, ems:~p",[NodeIds, Tl1Info]),
-        [amqp:publish(Channel, <<"master.direct">>, term_to_binary({tl1_info, Tl1Info}), to_list(Id)) || Id <- NodeIds]
-    end, Tl1Infos),
-    {reply, ok, State};
-
-
 handle_call(Req, _From, State) ->
     ?ERROR("Unexpected request: ~p", [Req]),
     {reply, ok, State}.
@@ -89,6 +76,7 @@ handle_nodeid({delete, {Type, CityId, Node}}) ->
     ets:delete_object(node_id, {{Type, CityId}, Node});
 handle_nodeid(Other) ->
     ?ERROR("Unexpected node_id: ~p", [Other]).
+	
 	
 get_queue(monitor, CityId) ->
     NodeId = get_one_nodeid({node_id, to_list(CityId)}),
