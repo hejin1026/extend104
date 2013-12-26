@@ -59,7 +59,7 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 handle_info(tick, #state{channel = Channel} = State) ->
-    WorkerNum = length(nodes()),
+    % WorkerNum = length(nodes()),
     SID = atom_to_list(node()),
     try 
        {unix, OsType} = os:type(),
@@ -71,9 +71,10 @@ handle_info(tick, #state{channel = Channel} = State) ->
        Mod:run([{sid, SID}])  of
         {ok, HostInfo,  Datalogs} ->
             ?INFO("~p", [Datalogs]),
-            HostInfo1 = [{sid, node()},{worker_num, WorkerNum} | HostInfo],
+			[_AgentName, HostName] = string:tokens(SID, "@"),
+            HostInfo1 = [{sid, node()},{host_name, HostName}| HostInfo],
             ?INFO("hostinfo: ~p", [HostInfo1]),
-            amqp:send(Channel, <<"db.reply">>, term_to_binary({hostinfo, HostInfo1})),
+            amqp:send(Channel, <<"agent.reply">>, term_to_binary({hostinfo, HostInfo1})),
             amqp:send(Channel, <<"server.datalog">>, term_to_binary(Datalogs))
     catch
          _:Exception -> ?ERROR("~p, ~p", [Exception, erlang:get_stacktrace()])

@@ -38,7 +38,9 @@ open(Conn) ->
 	{ok, Channel} = amqp:open_channel(Conn),
     amqp:topic(Channel, <<"master.topic">>),
     amqp:queue(Channel, <<"node.reply">>),
+	amqp:queue(Channel, <<"agent.reply">>),
     amqp:consume(Channel, <<"node.reply">>),
+	amqp:consume(Channel, <<"agent.reply">>),
     Channel.
 
 handle_call(Req, _From, State) ->
@@ -54,6 +56,11 @@ handle_cast(Msg, State) ->
 handle_info({deliver, <<"node.reply">>, _Properties, Payload}, State) ->
     ?ERROR("get reply :~p", [binary_to_term(Payload)]),
     handle_nodeid(binary_to_term(Payload)),
+	{noreply, State};
+
+handle_info({deliver, <<"agent.reply">>, _Properties, Payload}, State) ->
+    ?ERROR("get reply :~p", [binary_to_term(Payload)]),
+    handle_agent(binary_to_term(Payload)),
 	{noreply, State};
 
 
@@ -109,3 +116,26 @@ get_one_group(Type, CityId) ->
         _ -> [CityId]
      end.
 
+
+
+handle_agent({hostinfo, HostInfo}) ->
+    DateTime = {datetime, {date(), time()}},
+    SID = proplists:get_value(sid, HostInfo),
+    case emysql:select({servers, {sid, SID}}) of
+        {ok, [_Record|_]} ->
+            case emysql:update(servers, [{updated_at, DateTime} | HostInfo], {sid, SID}) of
+                {error, Reason} ->
+                    ?ERROR("insert host  :~p, ~n Reason: ~p", [HostInfo, Reason]);
+                _ ->
+                    ok
+             end;
+        {ok, []} ->
+            case emysql:insert(servers, [{created_at, DateTime} | HostInfo]) of
+                {error, Reason} ->
+                    ?ERROR("insert host  :~p, ~n Reason: ~p", [HostInfo, Reason]);
+                _ ->
+                    ok
+            end;
+        {error, Reason} ->
+            ?ERROR("~p",[Reason])
+    end.

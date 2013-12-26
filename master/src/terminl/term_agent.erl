@@ -42,8 +42,8 @@ init([]) ->
 
 open(Conn) ->
     {ok, Channel} = amqp:open_channel(Conn),
-    amqp:queue(Channel, <<"db.reply">>),
-    amqp:consume(Channel, <<"db.reply">>),
+    amqp:queue(Channel, <<"term.reply">>),
+    amqp:consume(Channel, <<"term.reply">>),
     Channel.
 
 handle_call(_Request, _From, State) ->
@@ -52,7 +52,7 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info({deliver, <<"db.reply">>, _Properties, Payload}, State) ->
+handle_info({deliver, <<"term.reply">>, _Properties, Payload}, State) ->
     handle_datalist(binary_to_term(Payload)),
     {noreply, State};
 
@@ -78,9 +78,6 @@ handle_datalist(DataList) when is_list(DataList) ->
 handle_datalist(Data)  ->
     handle_data(Data).
 
-
-handle_data({hostinfo, HostInfo}) ->
-    handle_hostinfo(HostInfo);
 handle_data({update, Table,Data}) ->
     try update_data(Table,Data)
     catch _:Err ->?ERROR("bad error: ~p,~p,~p", [Err,Table, Data])
@@ -89,28 +86,6 @@ handle_data({update, Table,Data}) ->
 handle_data(Data) ->
     ?INFO("unkown data :~p", [Data]),
     ok.
-
-handle_hostinfo(HostInfo) ->
-    DateTime = {datetime, {date(), time()}},
-    SID = proplists:get_value(sid, HostInfo),
-    case emysql:select({servers, {sid, SID}}) of
-        {ok, [_Record|_]} ->
-            case emysql:update(servers, [{updated_at, DateTime} | HostInfo], {sid, SID}) of
-                {error, Reason} ->
-                    ?ERROR("insert host  :~p, ~n Reason: ~p", [HostInfo, Reason]);
-                _ ->
-                    ok
-             end;
-        {ok, []} ->
-            case emysql:insert(servers, [{created_at, DateTime} | HostInfo]) of
-                {error, Reason} ->
-                    ?ERROR("insert host  :~p, ~n Reason: ~p", [HostInfo, Reason]);
-                _ ->
-                    ok
-            end;
-        {error, Reason} ->
-            ?ERROR("~p",[Reason])
-    end.
 
 update_data(Table,Data) ->
     case emysql:update(Table, [{updated_at, {datetime, calendar:local_time()}} | Data]) of
