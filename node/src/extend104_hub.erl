@@ -55,7 +55,7 @@ handle_call(Req, _From, State) ->
 	?ERROR("badreq: ~p", [Req]),
     {reply, {badreq, Req}, State}.
 
-handle_cast({measure, Cid, DataList}=Payload, #state{channel = Channel} = State) ->
+handle_cast({measure, Cid, DateTime, DataList}=Payload, #state{channel = Channel} = State) ->
     ?INFO("send datalog: ~p, ~p",[Cid, DataList]),
     amqp:send(Channel, <<"measure.datalog">>, term_to_binary(Payload)),
     {noreply, State};

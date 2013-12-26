@@ -17,7 +17,7 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 start_connection(Sup, ConnectionParams) ->
-    supervisor:start_child(Sup, [ConnectionParams]).	
+    supervisor:start_child(Sup, [self(), ConnectionParams]).	
 
 init([]) ->
     {ok, {{simple_one_for_one, 0, 1},

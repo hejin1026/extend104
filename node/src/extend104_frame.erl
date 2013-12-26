@@ -37,12 +37,12 @@ process_asdu(#extend104_frame{payload = <<Type,SQ:1,VSQ:7,COT:8,_COT:1/binary,Ad
 	case process_asdu(Type, ASDU) of
 		ok -> ok;
 		{data, Data} ->
+			%TODO pare business data
 			?INFO("get data:~p,~p", [Type, Data]);
 		{datalist, DataList} ->
-			?INFO("get asdu:~p,data length:~p, ~n ~p", [ASDU#extend104_asdu{data= <<>>}, length(DataList), DataList]),
+			?INFO("get asdu:~p,data length:~p, ~n ~p", [ASDU#extend104_asdu{data= <<>>}, length(DataList) == VSQ, DataList]),
 			DataList1 = lists:map(fun({PAddr, Value}) ->
-				MeasId = #measure_id{type=Type, no=reverse_byte_value(PAddr)},
-				#measure{id= MeasId, station_no=VSQ, cot=COT, value = Value}
+				#measure{cid=reverse_byte_value(Addr),type=Type, no=reverse_byte_value(PAddr), cot=COT, value = Value}
 			end, DataList),
 			{measure, DataList1}
 	end.

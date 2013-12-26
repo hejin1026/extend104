@@ -84,8 +84,10 @@ handle_call(Msg, _From, State) ->
 	?ERROR("unext call msg :~p", [Msg]),
 	{reply, ok, State}.
 	
-handle_cast({dispatch, {monitor, _Cid, _Data}=Payload}, State) ->
-    handle_monitor(Payload, State),
+	
+handle_cast({dispatch, {monitor, Cid, _Data}=Payload}, State) ->
+	with_monitor(Cid, fun(Node) -> ?INFO("has already monitor:~p, in:~p", [Cid, Node]) end,
+				fun() -> handle_monitor(Payload, State) end),
 	{noreply, State};	
 
 handle_cast({dispatch, {sync, Cid}}, #state{channel = Channel}=State) ->
@@ -94,6 +96,14 @@ handle_cast({dispatch, {sync, Cid}}, #state{channel = Channel}=State) ->
 					end),
 	{noreply, State};		
 	
+handle_cast({dispatch, {unmonitor, Cid}}, #state{channel = Channel}=State) ->
+	with_monitor(Cid, fun(undefined) -> e({no_monitored, Cid});
+					(Node) -> 
+						amqp:send(Channel, Node, term_to_binary({unmonitor, Cid})),
+						mnesia:dirty_delete(dispatch, {monitor, Cid})
+					end),
+	{noreply, State};
+		
 handle_cast(Msg, State) ->
 	?ERROR("unext case msg :~p", [Msg]),
 	{noreply, State}.
@@ -136,16 +146,20 @@ handle_monitor({monitor, Cid, Data}=Payload, #state{channel=Channel}) ->
 			end).	
 		
 
-handle_reply({monitored, Cid, Node}, _State) ->
+handle_reply({monitored, Cid, MonitorQ, Node}, _State) ->
 	with_monitor(Cid, fun(OldNode) ->
                if
                    OldNode == undefined -> ok;
-                   OldNode == Node -> ok;
-                   true -> ?ERROR("two nodes for one dn: ~p, oldnode: ~p, newnode: ~p", [Cid, OldNode, Node])
+                   OldNode == MonitorQ -> ok;
+                   true -> ?ERROR("two nodes for one cid: ~p, oldnode: ~p, newnode: ~p", [Cid, OldNode, MonitorQ])
                end,
-			   update_channel(Cid, Node),
-               mnesia:dirty_write(#dispatch{id=Cid, node=Node})
+			   [NodeName, HostName] = string:tokens(atom_to_list(Node), "@"),
+			   update_channel(Cid, [{node_name, NodeName}, {host_name, HostName}]),
+               mnesia:dirty_write(#dispatch{id={monitor, Cid}, node=MonitorQ})
 			end);
+			
+handle_reply({status, Cid, Connect}, _State) ->
+	update_channel(Cid, [{connect_status, Connect}]);
     
 handle_reply({frame, Cid, {Type, Time, Frame}}, #state{channel=Channel}) ->
 	case lookup(Cid) of
@@ -162,15 +176,13 @@ handle_reply(_Reply, _State) ->
 lookup(Cid) ->
 	ets:lookup(cid_wb, Cid). 
 	
-update_channel(Cid, Node) ->
-	[NodeName, HostName] = string:tokens(atom_to_list(Node), "@"),
-	NodeInfo = [{node_name, NodeName}, {host_name, HostName}],
+update_channel(Cid, Info) ->
 	DateTime = {datetime, {date(), time()}},
     case emysql:select({channel, {id, Cid}}) of
         {ok, [_Record|_]} ->
-            case emysql:update(channel, [{updated_at, DateTime} | NodeInfo], {id, Cid}) of
+            case emysql:update(channel, [{updated_at, DateTime} | Info], {id, Cid}) of
                 {error, Reason} ->
-                    ?ERROR("update :~p, ~n Reason: ~p", [NodeInfo, Reason]);
+                    ?ERROR("update :~p, ~n Reason: ~p", [Info, Reason]);
                 _ ->
                     ok
              end;
@@ -178,7 +190,8 @@ update_channel(Cid, Node) ->
             ?ERROR("can not find channel:~p",[Cid]);
         {error, Reason} ->
             ?ERROR("~p",[Reason])
-    end.		
+    end.
+		
 
 with_monitor(Cid, F) ->
 	with_monitor(Cid, F, fun() -> e({no_dispatch, Cid}) end).
@@ -192,7 +205,7 @@ with_monitor(Cid, F, E) ->
             F(Node)
     end.
 		
-parse_monitor(Payload) ->
+parse_monitor(_Payload) ->
 	ok.			
 
 e(E) -> {error, E}.

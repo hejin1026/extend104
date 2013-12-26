@@ -6,7 +6,7 @@
 
 -include_lib("elog/include/elog.hrl").
 
--export([start_link/1,
+-export([start_link/2,
 		status/1,
 		send/2,
 		subscribe/2,
@@ -37,12 +37,12 @@
 
 -define(TIMEOUT, 8000).
 
--record(state, {cid, host, port, sock, rest= <<>>, subscriber = [], timer}).
+-record(state, {server, cid, host, port, sock, rest= <<>>, subscriber = [], timer}).
 
 -import(extbif, [to_list/1]).
 
-start_link(Args) ->
-	gen_fsm:start_link(?MODULE, [Args], []).
+start_link(Server, Args) ->
+	gen_fsm:start_link(?MODULE, [Server, Args], []).
 
 status(C) when is_pid(C) ->
 	gen_fsm:sync_send_all_state_event(C, status).	
@@ -58,7 +58,7 @@ unsubscribe(C, SPid) ->
 	gen_fsm:sync_send_event(C, {unsubscribe,SPid}).		
 
 
-init([Args]) ->
+init([Server, Args]) ->
 	?INFO("conn info:~p", [Args]),
 	Cid = proplists:get_value(id, Args),
 	Host = proplists:get_value(ip, Args),
@@ -67,7 +67,7 @@ init([Args]) ->
 	put(send_c,0),
 	put(ser_send_cn,{0,0}),
 	put(ser_recv_cn,{0,0}),
-	{ok, connecting, #state{cid=Cid, host=to_list(Host), port=Port}, 0}.
+	{ok, connecting, #state{server=Server, cid=Cid, host=to_list(Host), port=Port}, 0}.
 
 connecting(timeout, State) ->
     connect(State);
@@ -77,12 +77,13 @@ connecting(_Event, State) ->
 connecting(_Event, _From, State) ->
     {reply, {error, connecting}, connecting, State}.
 
-connect(State = #state{host=Host, port=Port}) ->
+connect(State = #state{server=Server, cid=Cid, host=Host, port=Port}) ->
 	?INFO("begin to conn", []),
     case gen_tcp:connect(Host, Port, ?TCPOPTIONS, ?TIMEOUT) of 
     {ok, Sock} ->
 		?INFO("~p:~p is connected.", [Host, Port]),
 		send(self(), 'STARTDT'),
+		Server ! {status, Cid, connected},
         {next_state, connected, State#state{sock = Sock}};
     {error, Reason} ->
 		?ERROR("failed to connect ~p:~p, error: ~p.", [Host, Port, Reason]),
@@ -146,7 +147,7 @@ handle_info({tcp_closed, Sock}, connected, State=#state{sock=Sock}) ->
 	?ERROR_MSG("tcp closed."),
     {next_state, disconnected, State};
 
-handle_info({timeout, reconnect}, connecting, S) ->
+handle_info(reconnect, connecting, S) ->
     connect(S);
 
 handle_info({timeout, _Timer, heartbeat}, connected, State) ->
@@ -234,14 +235,16 @@ process_apci_i(Frame, State) ->
 	put(ser_send_cn, {Frame#extend104_frame.c1, Frame#extend104_frame.c2}),	
 	put(ser_recv_cn, {Frame#extend104_frame.c3, Frame#extend104_frame.c4}),
 	confirm_frame(State),
+	DateTime = {datetime, {date(), time()}},
 	case extend104_frame:process_asdu(Frame) of
 		ok -> ok;
-		{measure, _DataList} =Payload ->
-			handle_data(Payload, State)
+		{measure, DataList} ->
+			handle_data({measure, DateTime, DataList}, State)
 	end.		
 
-handle_data({measure, DataList}, #state{cid=Cid}=State) ->
-	extend104_hub:send_datalog({measure, Cid, DataList}).
+handle_data({measure, DateTime, DataList}, #state{cid=Cid}) ->
+	?INFO("get measure from cid:~p",[Cid]),
+	extend104_hub:send_datalog({measure, Cid, DateTime, DataList}).
 	
 			
 process_apci_s(Frame) ->

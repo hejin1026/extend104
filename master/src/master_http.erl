@@ -61,7 +61,7 @@ reply400(Req, Msg) ->
 	Reply.	
 	
 format(Meas) ->
-	string:join(lists:map(fun(#measure{id=Id, value=V}) ->
+	string:join(lists:map(fun(#measure_data{id=Id, value=V}) ->
 		lists:concat([Id#measure_id.cid, '-', Id#measure_id.type,'-', Id#measure_id.no,':'])  ++ to_string(V)
 	end, Meas),"\n").
 

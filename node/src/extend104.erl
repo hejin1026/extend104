@@ -19,7 +19,7 @@
         terminate/2]).
 
 
--record(state, {cityid, channel, connection_sup, map_oid_pid = dict:new(), map_cid_pid = dict:new()}).
+-record(state, {cityid, channel, connection_sup, map_cid_pid = dict:new()}).
 
 start_link(CityId, ConnectionSup) ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [CityId, ConnectionSup], []).
@@ -57,12 +57,11 @@ get_node_queue() ->
     [NodeName|_] = string:tokens(atom_to_list(node()), "@"),
     NodeName ++ ".node".	
 	
-handle_connect(ConnConf, #state{connection_sup = ConnSup, map_oid_pid=MapOP, map_cid_pid=MapCP} = State) ->
+handle_connect(ConnConf, #state{connection_sup = ConnSup, map_cid_pid=MapCP} = State) ->
     case extend104_connection_sup:start_connection(ConnSup, ConnConf) of
         {ok, ConnPid} ->
-            Oid = get_oid(ConnConf), 
 			Cid = get_cid(ConnConf),
-			{reply, {ok, ConnPid}, State#state{map_oid_pid=dict:store(Oid, ConnPid, MapOP), 
+			{reply, {ok, ConnPid}, State#state{
 					map_cid_pid=dict:store(Cid, ConnPid, MapCP)}};
         {error, Error} ->
             ?ERROR("get conn error: ~p, ~p", [Error, ConnConf]),
@@ -73,12 +72,14 @@ handle_connect(ConnConf, #state{connection_sup = ConnSup, map_oid_pid=MapOP, map
 handle_call({open_conn, ConnConf}, _From, State) ->
 	handle_connect(ConnConf, State);	
 handle_call({delete_conn, Cid}, _From, #state{map_cid_pid = MapCP} = State) ->
-	ConnPid = dict:find(Cid, MapCP),
-	exit(ConnPid, "delete conn"),
+	case dict:find(Cid, MapCP) of
+		{ok, ConnPid} ->
+			exit(ConnPid, "delete conn");
+		error ->
+			?ERROR("can not find cid for delete:~p",[Cid])
+	end,			
 	{reply, ok, State};
 	
-handle_call({get_conn_pid, Oid}, _From, #state{map_oid_pid = MapOP} = State) when is_record(Oid, extend104_oid)->
-	{reply, dict:find(Oid, MapOP), State};	
 handle_call({get_conn_pid, Cid}, _From, #state{map_cid_pid = MapCP} = State) ->
 	{reply, dict:find(Cid, MapCP), State};		
 	
@@ -100,6 +101,11 @@ handle_cast({sync, Cid}, #state{map_cid_pid = MapCP} = State) ->
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 	
+	
+handle_info({status, Cid, Connect} = Payload, #state{channel = Channel} = State) ->
+	amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Payload)),
+    {noreply, State};		
+	
 handle_info(_Msg ,State) ->
 	{noreply, State}.
 				
@@ -112,12 +118,6 @@ terminate(_Reason, #state{cityid=CityId, channel=Channel}) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-	
-get_oid(ConnConf) ->
-	Ip = proplists:get_value(ip, ConnConf),	
-	Port = proplists:get_value(port, ConnConf),
-	#extend104_oid{ip=extbif:to_binary(Ip), port=Port}.
-	
 get_cid(ConnConf) ->
 	Cid = proplists:get_value(id, ConnConf),
 	Cid.

@@ -6,7 +6,7 @@
 
 -include_lib("elog/include/elog.hrl").
 
--export([start_link/1]).
+-export([start_link/1, send/1]).
 
 -behavior(gen_server).
 
@@ -19,6 +19,10 @@
 
 start_link(Opts) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Opts], []).
+	
+send(Mes) ->
+	gen_server:cast(?MODULE, Mes).	
+	
 
 init([CityId]) ->
     {ok, Conn} = amqp:connect(),
@@ -45,10 +49,6 @@ handle_call(Req, _From, State) ->
     ?ERROR("Unexpected request: ~p", [Req]),
     {reply, ok, State}.
 
-handle_cast({datalog, DataLog}, #state{channel = Channel} = State) ->
-    amqp:send(Channel, <<"master.monet">>, term_to_binary({datalog, DataLog})),
-    {noreply, State};
-
 handle_cast(Msg, State) ->
     ?ERROR("Unexpected message: ~p", [Msg]),
     {noreply, State}.
@@ -58,13 +58,13 @@ handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} =
     ?INFO("get from quene :~p,~p", [RoutingKey, binary_to_term(Payload)]),
     case binary_to_term(Payload) of
         {monitor, Cid, Data} -> % By CityId Queue
-            Node = {monitored, Cid, get_monet_query()},
-            amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Node)),
-            extend104:open_conn(Data);
+            Node = {monitored, Cid, get_monet_query(), node()},
+			extend104:open_conn(Data),			
+			amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Node));
 		{sync, Cid} ->
 			extend104:sync(Cid);	
         {unmonitor, Cid} ->
-			extend104:delete(Cid);
+			extend104:delete_conn(Cid);
 		{subscribe, Cid} -> % by node queue
 			case ets:member(cid_wb, Cid) of
 				true ->
@@ -90,7 +90,7 @@ handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} =
             ok
     end,
     {noreply, State};
-
+	
 handle_info({frame, Cid, {Type, Time, Frame}} = Payload, #state{channel = Channel} = State) ->
 	amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Payload)),
 	{noreply, State};

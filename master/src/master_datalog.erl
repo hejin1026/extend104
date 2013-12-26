@@ -23,6 +23,7 @@
 -record(state, {channel}).
 
 -import(extbif, [to_binary/1]).
+
 	
 start_link() ->
     gen_server2:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -33,7 +34,7 @@ get_measure(Measure) ->
 init([]) ->
     {ok, Conn} = amqp:connect(),
     Channel = open(Conn),
-	ets:new(extend104_measure, [ordered_set, named_table, {keypos, #measure.id}]),
+	ets:new(extend104_measure, [ordered_set, named_table, {keypos, #measure_data.id}]),
     {ok, #state{channel = Channel}}.
 
 open(Conn) ->
@@ -48,10 +49,10 @@ handle_call({get_measure, {Cid, MeaType, MeaNo}}, _From, State) ->
 	Meas = case MeaType of
 		'$_' ->
 			ets:tab2list(extend104_measure);
-		_ ->	
+		_ ->
 			ets:match_object(extend104_measure, 
-				#measure{id= #measure_id{cid=binary_to_integer(Cid), type=binary_to_integer(MeaType),no=binary_to_integer(MeaNo)},
-					 station_no='_', cot='_',value='_'})
+				#measure_data{id= #measure_id{cid=binary_to_integer(Cid), type=binary_to_integer(MeaType),no=binary_to_integer(MeaNo)},
+					 datetime='_',value='_'})
 	end,			
 	{reply, {ok, Meas}, State};
 	
@@ -83,13 +84,13 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-handle_data({measure, Cid, Datalist}) ->
+handle_data({measure, Cid, DateTime, Datalist}) ->
 	lists:foreach(fun(Meas) ->
-		MeasId = Meas#measure.id,
-		NewMeasId = MeasId#measure_id{cid=Cid},
-		ets:insert(extend104_measure, Meas#measure{id=NewMeasId})
+		MeasId = #measure_id{cid=Cid,type=Meas#measure.type, no=Meas#measure.no},
+		ets:insert(extend104_measure, #measure_data{id=MeasId, datetime=DateTime, value=Meas#measure.value})
 	end, Datalist);		
 handle_data({datalog, SID, Timestamp, Datalog}) ->
+	%TODO waiting for business data
 	?INFO_MSG("need to do...");
 handle_data(_Reply) ->
     ok.		
