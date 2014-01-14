@@ -75,13 +75,13 @@ handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} =
 							extend104_connection:subscribe(ConnPid, self()),
 							ets:insert(cid_wb, {Cid, ConnPid});
 						error ->
-							{error, no_conn}
+							no_conn
 					end	
 			end;
 		{unsubscribe, Cid} ->
 			case ets:lookup(cid_wb, Cid) of
 				[] ->
-					{error, no_subscribe};
+					no_subscribe;
 				[{Cid, ConnPid}] ->
 					extend104_connection:unsubscribe(ConnPid, self()),
 					ets:delete(cid_wb, Cid)

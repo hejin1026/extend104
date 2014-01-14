@@ -86,7 +86,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 handle_data({measure, Cid, DateTime, Datalist}) ->
 	lists:foreach(fun(Meas) ->
-		MeasId = #measure_id{cid=Cid,type=Meas#measure.type, no=Meas#measure.no},
+		MeasId = #measure_id{cid=Cid, type=Meas#measure.type, no=Meas#measure.no},
 		ets:insert(extend104_measure, #measure_data{id=MeasId, datetime=DateTime, value=Meas#measure.value})
 	end, Datalist);		
 handle_data({datalog, SID, Timestamp, Datalog}) ->

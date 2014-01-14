@@ -29,7 +29,9 @@ start_link(CityId) ->
     Monitor = {extend104_monitor, {extend104_monitor, start_link, [CityId]},
 			permanent, 10, worker, [extend104_monitor]},
 	supervisor:start_child(Sup, Monitor),
-    Hub = {extend104_hub, {extend104_hub, start_link, []},
+	
+	{ok, Config} = application:get_env(ertdb), 
+    Hub = {extend104_hub, {extend104_hub, start_link, [Config]},
 			permanent, 10, worker, [extend104_hub]},
 	supervisor:start_child(Sup, Hub),
 	{ok, Sup}.

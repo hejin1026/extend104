@@ -16,6 +16,7 @@
 
 %% Helper macro for declaring children of supervisor
 -define(CHILD(I, Type), {I, {I, start_link, []}, permanent, 10, Type, [I]}).
+-define(CHILD(I, Type, Args), {I, {I, start_link, [Args]}, permanent, 10, Type, [I]}).
 
 %% ===================================================================
 %% API functions
@@ -30,7 +31,8 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-	Matser = ?CHILD(master, worker),
+	{ok, Conf} = application:get_env(ertdb), 
+	Matser = ?CHILD(master, worker, Conf),
 	Dist = ?CHILD(master_dist, worker),
 	Term = ?CHILD(term, worker),
 	TermAgent = ?CHILD(term_agent, worker),

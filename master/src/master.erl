@@ -8,7 +8,8 @@
 
 -behavior(gen_server).
 
--export([start_link/0,
+-export([start_link/1,
+		config/1, ertdb/1,
 		get_queue/2]).
 
 -export([init/1, 
@@ -18,20 +19,28 @@
 		terminate/2, 
 		code_change/3]).
 
--record(state, {channel}).	
+-record(state, {channel, ertdb, ertdb_config}).	
 
 -import(extbif, [to_list/1]).
 		
-start_link() ->
-    gen_server2:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link(Config) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [Config], []).
 		
+config(Cmd) ->
+	gen_server:call(?MODULE, {config, Cmd}).		
+	
+ertdb(connect) ->
+	gen_server:call(?MODULE, ertdb_connect);
+ertdb(close) ->
+	gen_server:call(?MODULE, ertdb_close).				
 			
-init([]) ->
+init([Config]) ->
     {ok, Conn} = amqp:connect(),
     Channel = open(Conn),
     ets:new(node_id, [bag, named_table]),
     io:format("~n~s:  manager is starting...[done]~n", [node()]),
-    {ok, #state{channel = Channel}}.
+	
+    {ok, #state{channel = Channel, ertdb_config = Config}}.
 
 
 open(Conn) ->
@@ -42,6 +51,30 @@ open(Conn) ->
     amqp:consume(Channel, <<"node.reply">>),
 	amqp:consume(Channel, <<"agent.reply">>),
     Channel.
+	
+handle_call(ertdb_connect, _From, #state{ertdb_config = Config}=State) ->
+	case ertdb_client:start_link(Config) of
+		{ok, Client} ->
+			{reply, ok, State#state{ertdb=Client}};
+		{error, Reason} ->
+			{reply, {error, Reason}, State}
+	end;		
+	
+handle_call(ertdb_close, _From, #state{ertdb = Client}=State) ->
+	ertdb_client:stop(Client),
+	{reply, ok, State#state{ertdb=undefined}};	
+	
+handle_call({config, _Cmd}, _From, #state{ertdb=undefined}=State) ->	
+	{reply, {error, unconn}, State};
+	
+handle_call({config, Cmd}, _From, #state{ertdb=Client}=State) ->
+	case ertdb_client:q(Client, Cmd) of
+		{ok, <<"1">>} ->
+			ok;
+		{error, Reason} ->
+			?ERROR("config error:~p,~p", [Cmd, Reason])	
+	end,		
+	{reply, ok, State};
 
 handle_call(Req, _From, State) ->
     ?ERROR("Unexpected request: ~p", [Req]),
