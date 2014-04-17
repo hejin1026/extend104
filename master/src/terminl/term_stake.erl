@@ -12,8 +12,8 @@
 -export([load/0]).
 
 load() ->
-	Sql = "select t1.*,t2.id as tid from channel t1 left join term_stake t2 on t2.id=t1.stake_id  
-           where t1.channel_type =0",
+	Sql = "select t1.*,t2.id as tid from channels t1 ,term_stake t2 
+           where t1.channel_type =0 and t2.id=t1.stake_id ",
 	case emysql:sqlquery(Sql) of
         {ok, Records} ->
             Store = fun(Channel) -> mnesia:write(term:get_channel(stake, Channel)) end,

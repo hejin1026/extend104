@@ -178,9 +178,9 @@ lookup(Cid) ->
 	
 update_channel(Cid, Info) ->
 	DateTime = {datetime, {date(), time()}},
-    case emysql:select({channel, {id, Cid}}) of
+    case emysql:select({channels, {id, Cid}}) of
         {ok, [_Record|_]} ->
-            case emysql:update(channel, [{updated_at, DateTime} | Info], {id, Cid}) of
+            case emysql:update(channels, [{updated_at, DateTime} | Info], {id, Cid}) of
                 {error, Reason} ->
                     ?ERROR("update :~p, ~n Reason: ~p", [Info, Reason]);
                 _ ->

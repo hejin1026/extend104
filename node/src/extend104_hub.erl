@@ -57,12 +57,11 @@ handle_call(Req, _From, State) ->
 	?ERROR("badreq: ~p", [Req]),
     {reply, {badreq, Req}, State}.
 
-handle_cast({measure, Cid, DateTime, DataList}, #state{ertdb=Client} = State) ->
-    ?INFO("send datalog: ~p, ~p",[Cid, DataList]),
+handle_cast({measure, Tid, DateTime, DataList}, #state{ertdb=Client} = State) ->
+    ?INFO("send datalog: ~p, ~p",[Tid, DataList]),
     % amqp:send(Channel, <<"measure.datalog">>, term_to_binary(Payload)),
 	lists:foreach(fun(Meas) ->
-		% MeasId = #measure_id{cid=Cid, type=Meas#measure.type, no=Meas#measure.no},
-		Key = build_key(Cid, Meas#measure.type, Meas#measure.no),
+		Key = build_key(Tid, Meas#measure.type, Meas#measure.no),
 		Cmd = ["insert", Key, DateTime, Meas#measure.value],
 		ok = ertdb_client:q_noreply(Client, Cmd)
 	end, DataList),

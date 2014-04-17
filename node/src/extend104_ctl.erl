@@ -17,3 +17,6 @@ status() ->
 	{value,_Version} ->
 		?PRINT_MSG("node is running~n")
     end.
+	
+state(Type) ->
+    io:format("state:~p", [sys:get_status(list_to_atom(Type))]).

@@ -125,10 +125,12 @@ process_M_SP_NA(_SQ, <<>>, Acc) ->
 	{datalist, Acc};
 process_M_SP_NA(0, <<PAddr:3/binary, IV:1, NT:1, SB:1,BL:1,SPI:4,Other/binary>>, Acc) ->
 	% ?INFO("get addr:~p,info :~p", [RPAddr, {IV,NT,SB,BL,SPI}]),
-	process_M_SP_NA(0, Other, [{PAddr, {IV,NT,SB,BL,SPI}}|Acc]);
+	NewAcc = check_iv(IV, {PAddr, SPI}, Acc),
+	process_M_SP_NA(0, Other, NewAcc);
 process_M_SP_NA(1, <<IV:1, NT:1, SB:1,BL:1,SPI:4,Other/binary>>, Acc) ->
 	% ?INFO("get info :~p", [{IV,NT,SB,BL,SPI}]),
-	process_M_SP_NA(1, Other, [{IV,NT,SB,BL,SPI}|Acc]).
+	NewAcc = check_iv(IV, SPI, Acc),
+	process_M_SP_NA(1, Other, NewAcc).
 
 
 % 11：M_ME_NA_1 遥测
@@ -140,9 +142,11 @@ process_M_ME_NA(#extend104_asdu{sq=1, data = <<PAddr:3/binary,Other/binary>>}) -
 process_M_ME_NA(_SQ, <<>>, Acc) ->
 	{datalist, Acc};
 process_M_ME_NA(0, <<PAddr:3/binary, Value:2/binary, IV:1, NT:1, SB:1,BL:1,OV:4,Other/binary>>, Acc) ->
-	process_M_ME_NA(0, Other, [{PAddr, {reverse_byte_value2(Value),IV,NT,SB,BL,OV}}|Acc]);
+	NewAcc = check_iv(IV, {PAddr, reverse_byte_value2(Value)}, Acc),
+	process_M_ME_NA(0, Other, NewAcc);
 process_M_ME_NA(1, <<Value:2/binary, IV:1, NT:1, SB:1,BL:1,OV:4,Other/binary>>, Acc) ->
-	process_M_ME_NA(1, Other, [{reverse_byte_value2(Value),IV,NT,SB,BL,OV}|Acc]).
+	NewAcc = check_iv(IV, reverse_byte_value2(Value), Acc),
+	process_M_ME_NA(1, Other, NewAcc).
 
 % 15：M_IT_NA_1	计数量
 process_M_IT_NA(#extend104_asdu{sq=0, data=Data}) ->
@@ -153,9 +157,19 @@ process_M_IT_NA(#extend104_asdu{sq=1, data = <<PAddr:3/binary,Other/binary>>}) -
 process_M_IT_NA(_, <<>>, Acc) ->
 	{datalist, Acc};
 process_M_IT_NA(0, <<PAddr:3/binary, Value:4/binary, IV:1, CA:1, CY:1,SQ:5,Other/binary>>, Acc) ->
-	process_M_IT_NA(0, Other, [{PAddr, {reverse_byte_value(Value),IV,CA,CY,SQ}}|Acc]);
+	NewAcc = check_iv(IV, {PAddr, reverse_byte_value(Value)}, Acc),
+	process_M_IT_NA(0, Other, NewAcc);
 process_M_IT_NA(1, <<Value:4/binary, IV:1, CA:1, CY:1,SQ:5,Other/binary>>, Acc) ->
-	process_M_IT_NA(1, Other, [{reverse_byte_value(Value),IV,CA,CY,SQ}|Acc]).	
+	NewAcc = check_iv(IV, reverse_byte_value(Value), Acc),
+	process_M_IT_NA(1, Other, NewAcc).	
+	
+
+check_iv(0, Value, Acc) ->
+	[Value|Acc];
+check_iv(1, Value, Acc) ->
+	?ERROR("invaild vaule:~p", [Value]),
+	Acc.	
+		
 
 % 130	
 process_130(1, <<StakeType,SerialNo:19/binary,StakeNo:17/binary,CardNo:4/binary, Begin:7/binary,CDType,

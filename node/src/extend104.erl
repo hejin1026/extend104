@@ -69,8 +69,15 @@ handle_connect(ConnConf, #state{connection_sup = ConnSup, map_cid_pid=MapCP} = S
      end.	
 	
 	
-handle_call({open_conn, ConnConf}, _From, State) ->
-	handle_connect(ConnConf, State);	
+handle_call({open_conn, ConnConf}, _From, #state{map_cid_pid=MapCP} = State) ->
+	Cid = get_cid(ConnConf),
+	case dict:find(Cid, MapCP) of
+		{ok, _ConnPid} ->
+			{reply, {ok, already_conn}, State};
+		error ->	
+			handle_connect(ConnConf, State)
+	end;
+			
 handle_call({delete_conn, Cid}, _From, #state{map_cid_pid = MapCP} = State) ->
 	case dict:find(Cid, MapCP) of
 		{ok, ConnPid} ->
@@ -90,9 +97,9 @@ handle_call(Req, _From, State) ->
 handle_cast({sync, Cid}, #state{map_cid_pid = MapCP} = State) ->
 	case dict:find(Cid, MapCP) of
 		{ok, Conn} ->
-			extend104_connectin:send(Conn, 'C_IC_NA_1'),
-			extend104_connectin:send(Conn, 'C_CI_NA_1'),
-			extend104_connectin:send(Conn, 'C_CS_NA_1');
+			extend104_connection:send(Conn, 'C_IC_NA_1'),
+			extend104_connection:send(Conn, 'C_CI_NA_1'),
+			extend104_connection:send(Conn, 'C_CS_NA_1');
 		error ->
 			?ERROR("can not sync,no conn:~p", [Cid])
 	end,			

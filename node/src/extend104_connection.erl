@@ -37,7 +37,7 @@
 
 -define(TIMEOUT, 8000).
 
--record(state, {server, cid, host, port, sock, rest= <<>>, subscriber = [], timer}).
+-record(state, {server, cid, tid, host, port, args, sock, rest= <<>>, subscriber = [], timer}).
 
 -import(extbif, [to_list/1]).
 
@@ -61,13 +61,14 @@ unsubscribe(C, SPid) ->
 init([Server, Args]) ->
 	?INFO("conn info:~p", [Args]),
 	Cid = proplists:get_value(id, Args),
+	Tid = proplists:get_value(tid, Args),
 	Host = proplists:get_value(ip, Args),
 	Port = proplists:get_value(port, Args),
 	put(recv_c,0),
 	put(send_c,0),
 	put(ser_send_cn,{0,0}),
 	put(ser_recv_cn,{0,0}),
-	{ok, connecting, #state{server=Server, cid=Cid, host=to_list(Host), port=Port}, 0}.
+	{ok, connecting, #state{server=Server, cid=Cid, tid=Tid, host=to_list(Host), port=Port, args=Args}, 0}.
 
 connecting(timeout, State) ->
     connect(State);
@@ -235,16 +236,16 @@ process_apci_i(Frame, State) ->
 	put(ser_send_cn, {Frame#extend104_frame.c1, Frame#extend104_frame.c2}),	
 	put(ser_recv_cn, {Frame#extend104_frame.c3, Frame#extend104_frame.c4}),
 	confirm_frame(State),
-	DateTime = {datetime, {date(), time()}},
+	DateTime = extbif:timestamp(),
 	case extend104_frame:process_asdu(Frame) of
 		ok -> ok;
 		{measure, DataList} ->
 			handle_data({measure, DateTime, DataList}, State)
 	end.		
 
-handle_data({measure, DateTime, DataList}, #state{cid=Cid}) ->
-	?INFO("get measure from cid:~p",[Cid]),
-	extend104_hub:send_datalog({measure, Cid, DateTime, DataList}).
+handle_data({measure, DateTime, DataList}, #state{tid=Tid}) ->
+	?INFO("get measure from tid:~p",[Tid]),
+	extend104_hub:send_datalog({measure, Tid, DateTime, DataList}).
 	
 			
 process_apci_s(Frame) ->
