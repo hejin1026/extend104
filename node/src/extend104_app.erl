@@ -28,4 +28,6 @@ start(_StartType, _StartArgs) ->
     extend104_sup:start_link(CityId).
 
 stop(_State) ->
+	io:format("stop extend104..."),
     ok.
+

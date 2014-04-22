@@ -13,10 +13,16 @@ status() ->
     ?PRINT("Node ~p is ~p.", [node(), InternalStatus]),
     case lists:keysearch(extend104, 1, application:which_applications()) of
 	false ->
-		?PRINT_MSG("node is not running~n");
+		"node is not running~n";
 	{value,_Version} ->
-		?PRINT_MSG("node is running~n")
+		"node is running~n"
     end.
 	
 state(Type) ->
-    io:format("state:~p", [sys:get_status(list_to_atom(Type))]).
+    sys:get_status(list_to_atom(Type)).
+	
+	
+%% set %%
+stop() ->
+	extend104_app:stop(),
+    init:stop().

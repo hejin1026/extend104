@@ -34,7 +34,7 @@ config() ->
 			Cid = proplists:get_value(cid, Record),
 			No = proplists:get_value(no, Record),
 			Category = proplists:get_value(category, Record),
-			Key = build_key(Cid, Category, No),
+			Key = proplists:get_value(key, Record),
 			Value = build_config(Record, []),
 			Cmd = ["config", Key, Value],
 			master:config(Cmd)
@@ -43,7 +43,7 @@ config() ->
 			case master:ertdb(connect) of
 				ok ->
 					Sql = "select t3.id as cid, t1.* 
-							from measure t1, term_station t2, channel t3 
+							from term_measure t1, term_station t2, channel t3 
 							where t1.station_id=t2.id and t2.id=t3.station_id",
 					case emysql:sqlquery(Sql) of
 				        {ok, Records} ->
@@ -51,16 +51,6 @@ config() ->
 				            ?ERROR("finish from station ~p: ~p ~n", [?MODULE, length(Records)]);
 				        {error, Reason}  ->
 				            ?ERROR("start failure...~p",[Reason]),
-				            stop
-					end,
-					Sql2 = "select t3.id as cid, t1.* 
-							from measure t1, term_stake t2, channel t3 
-							where t1.stake_id = t2.id and t2.id=t3.stake_id",
-					case emysql:sqlquery(Sql2) of
-				        {ok, Records2} ->
-				            lists:foreach(Config, Records2),
-				            ?ERROR("finish from stake ~p: ~p ~n", [?MODULE, length(Records2)]);
-				        {error, _}  ->
 				            stop
 					end,
 					master:ertdb(close);
@@ -100,6 +90,10 @@ build_key(Cid, Type, No) ->
 	
 build_config([], Acc) ->
 	 string:join([lists:concat([K, "=", strnum(V)]) || {K, V} <- Acc], ",");	
+build_config([{coef, Value}|Data], Acc) ->	
+	build_config(Data, [{coef, Value}|Acc]);
+build_config([{offset, Value}|Data], Acc) ->	
+	build_config(Data, [{offset, Value}|Acc]);		 
 build_config([{deviation, Value}|Data], Acc) ->	
 	build_config(Data, [{dev, Value}|Acc]);
 build_config([{maxtime, Value}|Data], Acc) ->

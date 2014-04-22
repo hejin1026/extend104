@@ -48,11 +48,11 @@ websocket_handle({text, <<"connection:", Cid/binary>>}, Req, State) ->
 	
 websocket_handle({text, <<"cache:", Cid/binary>>}, Req, #state{status=cache, cache=Queue} = State) ->
 	Data = string:join(queue:to_list(Queue), "\n"),
-	save_file(["var/data", "channel=" ++ binary_to_list(Cid)], Data, "cache"),
-	{reply, {text, <<"begin to cache!">>}, Req, State#state{status=undefined, cache=queue:new(), count=0}};	
+	save_file(["data", "channel=" ++ binary_to_list(Cid)], "cache", Data),
+	{reply, {text, <<"cache over!">>}, Req, State#state{status=undefined, cache=queue:new(), count=0}};	
 						
 websocket_handle({text, <<"cache:", Cid/binary>>}, Req, State) ->
-	{reply, {text, <<"cache over!">>}, Req, State#state{status=cache, cache=queue:new(), count=0}};		
+	{reply, {text, <<"begin to cache!">>}, Req, State#state{status=cache, cache=queue:new(), count=0}};		
 		
 websocket_handle({text, <<Msg/binary>>}, Req, State) ->
 	{reply, {text, <<"unsupport msg:", Msg/binary>>}, Req, State};

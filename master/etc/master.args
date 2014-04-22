@@ -7,6 +7,8 @@
 
 -s master_app start
 
+-s reloader start
+
 -boot start_sasl 
  
 ## Heartbeat management; auto-restarts VM if it dies or becomes unresponsive

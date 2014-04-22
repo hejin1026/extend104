@@ -6,6 +6,8 @@
 
 -s extend104_app start
 
+-s reloader start
+
 -cityid common
 
 -num 3

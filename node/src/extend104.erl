@@ -113,7 +113,8 @@ handle_info({status, Cid, Connect} = Payload, #state{channel = Channel} = State)
 	amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Payload)),
     {noreply, State};		
 	
-handle_info(_Msg ,State) ->
+handle_info(Msg ,State) ->
+	?ERROR("unext msg:~p", [Msg]),
 	{noreply, State}.
 				
 
