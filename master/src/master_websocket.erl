@@ -63,8 +63,9 @@ websocket_info({timeout, _Ref, Msg}, Req, State) ->
 	{reply, {text, Msg}, Req, State};
 websocket_info({frame, Type, Time, Frame}, Req, State) ->
 	Data = extend104_util:bin_to_str(extend104_frame:serialise(Frame), 16),
-	Resp = lists:concat([Type, ":", Data, "(", extbif:strftime(Time), ")"]),
-	{reply, {text, Resp}, Req, handle_cache(Resp, State)};	
+	% Resp = lists:concat([Type, ":", Data, "(", extbif:strftime(Time), ")"]),
+	Resp = [{time, extbif:strftime(Time)}, {type, Type}, {data, Data}],
+	{reply, {text, jsonify(Resp)}, Req, handle_cache(Resp, State)};	
 websocket_info(_Info, Req, State) ->
 	?INFO("get info:~p, ~p", [self(), Req]),
 	{ok, Req, State}.
@@ -103,8 +104,13 @@ save_file(Folder, Name, Data) ->
         {ok, Fd} ->
             ?INFO("write file: ~p",[File]),
             file:write(Fd, Data),
-            file:close(Fd);
+            file:close(Fd),
+			os:cmd(lists:concat(["mv ", File, " var/log/"]));
+			
         Error ->
             ?WARNING("file open error :~p", [Error]),
             Error
      end.	
+	 
+jsonify(Term) ->
+    mochijson:encode(Term).

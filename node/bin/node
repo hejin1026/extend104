@@ -106,7 +106,7 @@ case "$ARGS" in
         $ERTS_PATH/run_erl -daemon $PIPE_DIR $RUNNER_LOG_DIR "$COMMAND" 2>&1 
         ;;
 
-    ' stop')
+    ' pkill')
         # Wait for the node to completely stop...
         case `uname -s` in
             Linux|Darwin|FreeBSD|DragonFly|NetBSD|OpenBSD)

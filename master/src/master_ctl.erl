@@ -9,6 +9,10 @@
 
 -compile(export_all).
 
+lookup_mnesia(Table) ->
+	mnesia:table_info(list_to_atom(Table), all).
+	
+
 run() ->
 	Dispatch = fun(Cid) ->
 		case term:lookup(Cid) of

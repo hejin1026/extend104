@@ -10,25 +10,16 @@
 		status/1,
 		send/2,
 		subscribe/2,
-		unsubscribe/2
+		unsubscribe/2,
+		command/2
 		]).
+		
+-export([sync/1]).		
 
--behavior(gen_fsm).
+-behaviour(gen_server2).
 
-%% gen_fsm callbacks
--export([init/1,
-        handle_info/3,
-        handle_event/3,
-        handle_sync_event/4,
-        code_change/4,
-        terminate/3]).
-
-% fsm state
--export([connecting/2,
-        connecting/3,
-        connected/2,
-        connected/3,
-		disconnected/2]).
+%% gen_server callbacks
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 
 -define(TCPOPTIONS, [binary, {packet, raw}, {active, true}]).
 		%{backlog,   128},
@@ -37,29 +28,55 @@
 
 -define(TIMEOUT, 8000).
 
--record(state, {server, cid, tid, host, port, args, sock, rest= <<>>, subscriber = [], timer}).
+-record(state, {server, cid, tid, host, port, args, 
+				socket, 
+				conn_state :: connected | disconnect,  
+				rest= <<>>, 
+				queue :: queue() | undefined,
+				subscriber = [], 
+				timer :: ref
+				}).
 
 -import(extbif, [to_list/1]).
 
+sync(C) ->
+	command(C, 'C_IC_NA_1'),
+	command(C, 'C_CI_NA_1'),
+	command(C, 'C_CS_NA_1').
+
+
 start_link(Server, Args) ->
-	gen_fsm:start_link(?MODULE, [Server, Args], []).
+	gen_server2:start_link(?MODULE, [Server, Args], []).
 
 status(C) when is_pid(C) ->
-	gen_fsm:sync_send_all_state_event(C, status).	
-
--spec send(C :: pid(), Cmd :: 'STARTDT' | 'STOPDT' | 'C_IC_NA_1' | atom()) -> ok.
-send(C, Cmd) when is_pid(C) and is_atom(Cmd) ->
-	gen_fsm:send_event(C, Cmd).
+	gen_server2:call(C, status).	
 	
 subscribe(C, SPid) ->
-	gen_fsm:sync_send_event(C, {subscribe,SPid}).	
+	gen_server2:call(C, {subscribe, SPid}).	
 	
 unsubscribe(C, SPid) ->
-	gen_fsm:sync_send_event(C, {unsubscribe,SPid}).		
+	gen_server2:call(C, {unsubscribe, SPid}).		
 
+-spec command(C :: pid(), Command :: {'C_DC_NA_1', list()}) -> ok.
+command(C, Command)	->
+	gen_server2:call(C, {command, Command}).
+	
+	
+-spec send(C :: pid(), Cmd :: 'STARTDT' | 'STOPDT' | 'C_IC_NA_1' | atom()) -> ok.
+send(C, Req) when is_pid(C) and is_atom(Req) ->
+	gen_server2:cast(C, {request, Req}).	
 
 init([Server, Args]) ->
 	?INFO("conn info:~p", [Args]),
+    case (catch do_init(Server, Args)) of
+	{error, Reason} ->
+	    {stop, Reason};
+	{ok, State} ->
+		connect(State)
+    end.
+	
+	
+do_init(Server, Args) ->
 	Cid = proplists:get_value(id, Args),
 	Tid = proplists:get_value(tid, Args),
 	Host = proplists:get_value(ip, Args),
@@ -68,131 +85,158 @@ init([Server, Args]) ->
 	put(send_c,0),
 	put(ser_send_cn,{0,0}),
 	put(ser_recv_cn,{0,0}),
-	{ok, connecting, #state{server=Server, cid=Cid, tid=Tid, host=to_list(Host), port=Port, args=Args}, 0}.
-
-connecting(timeout, State) ->
-    connect(State);
-connecting(_Event, State) ->
-    {next_state, connecting, State}.
-	
-connecting(_Event, _From, State) ->
-    {reply, {error, connecting}, connecting, State}.
+	{ok, #state{server=Server, cid=Cid, tid=Tid, host=to_list(Host), port=Port, args=Args} }.	
 
 connect(State = #state{server=Server, cid=Cid, host=Host, port=Port}) ->
-	?INFO("begin to conn", []),
+	?INFO_MSG("begin to conn"),
     case gen_tcp:connect(Host, Port, ?TCPOPTIONS, ?TIMEOUT) of 
     {ok, Sock} ->
 		?INFO("~p:~p is connected.", [Host, Port]),
 		send(self(), 'STARTDT'),
 		Server ! {status, Cid, connected},
-        {next_state, connected, State#state{sock = Sock}};
+		{ok, State#state{socket = Sock, conn_state = connected}};
     {error, Reason} ->
 		?ERROR("failed to connect ~p:~p, error: ~p.", [Host, Port, Reason]),
-		erlang:send_after(30000, self(), reconnect),
-        {next_state, connecting, State#state{sock = undefined}}
+		Server ! {status, Cid, disconnect},
+		% erlang:send_after(30000, self(), reconnect),
+        {ok, State#state{socket = null, conn_state = disconnect}}
     end.
 
 
-% 启动
-connected('STARTDT', State) ->
-	send_frame(?FRAME_STARTDT, State),
-	{next_state, connected, State};
-% 停止
-connected('STOPDT', State) ->
-	send_frame(?FRAME_STOPDT, State),
-	{next_state, connected, State};
-% 总召 100
-connected('C_IC_NA_1', #state{cid=Cid}=State) ->
-	BCid = extend104_util:reverse_int_value(Cid),
-	send_frame(?FRAME_C_IC_NA_1(BCid), State),
-	{next_state, connected, State};
-% 计量总召 101
-connected('C_CI_NA_1', #state{cid=Cid}=State) ->
-	BCid = extend104_util:reverse_int_value(Cid),
-	send_frame(?FRAME_C_CI_NA_1(BCid), State),
-	{next_state, connected, State};
-% 时钟同步 103
-connected('C_CS_NA_1', #state{cid=Cid}=State) ->
-	BCid = extend104_util:reverse_int_value(Cid),
-	send_frame(?FRAME_C_CS_NA_1(BCid), State),
-	{next_state, connected, State};
-connected(Frame, State) ->
-	?ERROR("badevent: ~p", [Frame]),
-	{next_state, connected, State}.
+handle_call(get_status, _From, #state{conn_state=ConnState} = State) ->
+    {reply, {ok, ConnState}, State};
+	
+handle_call({command, Command}, From, #state{conn_state=ConnState} = State) ->
+	case ConnState of
+		connected ->
+			case handle_cmd(Command, State) of
+				{error, Reason} = Error->
+					{reply, Error, State};	
+				Cmd ->
+		    		do_request(Cmd, From, State)
+			end;		
+		_ ->
+			{reply, {error,disconnect}, State}
+	end;			
+	
+handle_call({subscribe, SPid}, _From, #state{conn_state=ConnState, subscriber=Subs}=State) ->
+	case ConnState of
+		connected ->
+			{reply, ok, State#state{subscriber=[SPid|Subs]}};	
+		_ ->
+			{reply, {error, disconnect}, State}
+	end;	
+
+handle_call({unsubscribe, SPid}, _From, #state{conn_state=ConnState, subscriber=Subs}=State) ->
+	case ConnState of
+		connected ->
+			{reply, ok, State#state{subscriber=[SP||SP <- Subs, SP =/= SPid]}};	
+		_ ->
+			{reply, {error, disconnect}, State}
+	end;					
+
+handle_call(stop, _From, State) ->
+    ?INFO("received stop request", []),
+    {stop, normal, State};
+
+handle_call(Req, _From, State) ->
+    ?WARNING("unexpect request: ~p,~p", [Req, State]),
+    {reply, {error, {invalid_request, Req}}, State}.
 	
 	
-connected({subscribe, SPid}, _From, #state{subscriber=Subs}=State) ->
-	{reply, ok, connected, State#state{subscriber=[SPid|Subs]}};	
-connected({unsubscribe, SPid}, _From, #state{subscriber=Subs}=State) ->
-	{reply, ok, connected, State#state{subscriber=[SP||SP <- Subs, SP =/= SPid]}};		
-connected(_Event, _From, State) ->
-    {reply, {error, badevent}, connected, State}.
+handle_cast({request, Req}, #state{conn_state=connected} = State) ->
+	Cmd = handle_cmd(Req, State),
+    send_frame(Cmd, State),
+    {noreply, State};
 
-disconnected(connect, State) ->
-	connect(State);
-disconnected(Event, State) ->
-	?ERROR("badevent ~p", [Event]),
-	{next_state, discconnected, State}.
-
-
-handle_info({tcp, _Sock, Data}, connected, #state{rest=Rest, timer=LastTimer}=State) ->
+handle_cast(Msg, State) ->
+    ?WARNING("unexpected message: ~n~p", [Msg]),
+    {noreply, State}.
+	
+handle_info({tcp, _Sock, Data}, #state{rest=Rest, timer=LastTimer}=State) ->
 	?INFO("get msg lenth:~p, ~p",[size(Data), Data]),
 	NewRest = check_frame(list_to_binary([Rest, Data]), State),
 	if LastTimer == undefined -> ok;
 		true -> erlang:cancel_timer(LastTimer)
 	end,	
 	Timer = erlang:start_timer(20000, self(), heartbeat),
-    {next_state, connected, State#state{rest=NewRest, timer = Timer}};
+    {noreply, State#state{rest=NewRest, timer = Timer}};
 
-handle_info({tcp_closed, Sock}, connected, State=#state{sock=Sock}) ->
+handle_info({tcp_closed, Sock}, State=#state{socket=Sock}) ->
 	?ERROR_MSG("tcp closed."),
-    {next_state, disconnected, State};
+    {noreply, State#state{socket = undefined}};
+	
+handle_info({tcp_error, _Socket, _Reason}, State) ->
+    %% This will be followed by a close
+    {noreply, State};	
 
-handle_info(reconnect, connecting, S) ->
-    connect(S);
+handle_info(reconnect, State) ->
+	{ok, NState} =  connect(State),
+    {noreply, NState};
 
-handle_info({timeout, _Timer, heartbeat}, connected, State) ->
+handle_info({timeout, _Timer, heartbeat}, State) ->
 	send_frame(?FRAME_TESTFR_SEND, State),
-    {next_state, connected, State};
+    {noreply, State};
 
-handle_info(_Info, StateName, State) ->
-    {next_state, StateName, State}.
+handle_info(_Info, State) ->
+    {noreply, State}.
 
-handle_event(_Event, StateName, State) ->
-    {next_state, StateName, State}.
 
-handle_sync_event(status, _From, StateName, State) ->
-    {reply, StateName, StateName, State};
-
-handle_sync_event(stop, _From, _StateName, State) ->
-    {stop, normal, ok, State}.
-
-terminate(_Reason, _StateName, _State) ->
+terminate(_Reason, _State) ->
     ok.
 
-code_change(_OldVsn, StateName, State, _Extra) ->
-    {ok, StateName, State}.
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
 
 %%---------------- fun ------------------%%	
+do_request(Cmd, From, #state{conn_state = connected} = State) ->
+    case send_frame(Cmd, State) of
+        ok ->
+            NewQueue = queue:in({1, From}, State#state.queue),
+            {noreply, State#state{queue = NewQueue}};
+        {error, Reason} ->
+            {reply, {error, Reason}, State}
+    end;
 	
-check_frame(<<>>, _State) -> <<>>;		
-check_frame(<<16#68,L,Data/binary>> = Frames, State) ->
-	if L =< size(Data) ->
-		{FrameData, Rest} = split_binary(Data, L),
-		recv_frame(FrameData, State),
-		check_frame(Rest, State);	
-	true ->
-		Frames
-	end;		
-check_frame(Rest, _State) ->
-	?ERROR("get error msg:~p",[Rest]), 
-	<<>>.		
-	
-recv_frame(FrameData, #state{cid=Cid, subscriber=Subs}=State) ->
-	Frame = extend104_frame:parse(FrameData),
-	[SPid ! {frame, Cid, {recv, calendar:local_time(), Frame} } ||SPid <- Subs],
-	process_frame(Frame, State).	
+do_request(_Cmd, _From, State) ->
+    {reply, {error, no_connection}, State}.
 
+% 启动
+handle_cmd('STARTDT', State) ->
+	?FRAME_STARTDT;
+% 停止
+handle_cmd('STOPDT', State) ->
+	?FRAME_STOPDT;
+% 总召 100
+handle_cmd('C_IC_NA_1', #state{cid=Cid}=State) ->
+	BCid = extend104_util:reverse_int_value(Cid),
+	?FRAME_100(BCid);
+% 计量总召 101
+handle_cmd('C_CI_NA_1', #state{cid=Cid}=State) ->
+	BCid = extend104_util:reverse_int_value(Cid),
+	?FRAME_101(BCid);
+% 时钟同步 103
+handle_cmd('C_CS_NA_1', #state{cid=Cid}=State) ->
+	BCid = extend104_util:reverse_int_value(Cid),
+	?FRAME_103(BCid);
+		
+% 双点遥控 46
+handle_cmd({'C_DC_NA_1', Data}, State) ->
+	handle_cmd({46, Data}, State);
+handle_cmd({46, Data},#state{cid=Cid}=State) ->
+	BCid = extend104_util:reverse_int_value(Cid),
+	SE = case proplists:get_value(<<"action">>, Data) of
+		<<"select">> -> 1;
+		<<"exec">> -> 0;
+		_ -> 0
+	end,	
+	DCS = extbif:to_integer(proplists:get_value(<<"order">>, Data)),	
+	?FRAME_46(6, BCid, <<SE:1,0:5,DCS:2>>);
+	
+handle_cmd(Req, State) ->
+	?ERROR("badreq: ~p", [Req]),
+	{error, {unsupport_cmd, Req}}.
+	
 % send_cn is current = last s_recv_cn, recv_cn is next = last s_send_cn + 1
 send_frame(Frame, State) ->
 	SendFrame = 
@@ -211,10 +255,29 @@ send_frame(Frame, State) ->
 		end,	
 	do_send_frame(SendFrame, State).
 	
-do_send_frame(Frame, #state{cid=Cid, sock = Sock,subscriber=Subs}) when is_record(Frame, extend104_frame) ->
+do_send_frame(Frame, #state{cid=Cid, socket = Sock,subscriber=Subs}) when is_record(Frame, extend104_frame) ->
 	?INFO("send msg:~p", [extend104_frame:serialise(Frame)]),
 	[SPid ! {frame, Cid, {send, calendar:local_time(), Frame}} ||SPid <- Subs],
-    erlang:port_command(Sock, extend104_frame:serialise(Frame)).
+    erlang:port_command(Sock, extend104_frame:serialise(Frame)).	
+		
+	
+check_frame(<<>>, _State) -> <<>>;		
+check_frame(<<16#68,L,Data/binary>> = Frames, State) ->
+	if L =< size(Data) ->
+		{FrameData, Rest} = split_binary(Data, L),
+		recv_frame(FrameData, State),
+		check_frame(Rest, State);	
+	true ->
+		Frames
+	end;		
+check_frame(Rest, _State) ->
+	?ERROR("get error msg:~p",[Rest]), 
+	<<>>.		
+	
+recv_frame(FrameData, #state{cid=Cid, subscriber=Subs}=State) ->
+	Frame = extend104_frame:parse(FrameData),
+	[SPid ! {frame, Cid, {recv, calendar:local_time(), Frame} } ||SPid <- Subs],
+	process_frame(Frame, State).	
 		
 
 process_frame(#extend104_frame{c1 = C1} = Frame, State) ->
@@ -239,9 +302,37 @@ process_apci_i(Frame, State) ->
 	DateTime = extbif:timestamp(),
 	case extend104_frame:process_asdu(Frame) of
 		ok -> ok;
+		{response, Res} ->
+			% Resp = handle_response(Res),
+			reply(Res, State);
 		{measure, DataList} ->
 			handle_data({measure, DateTime, DataList}, State)
 	end.		
+
+reply(Value, #state{queue = Queue} = State) ->
+    case queue:out(Queue) of
+        {{value, {1, From}}, NewQueue} ->
+            safe_reply(From, Value),
+            NewQueue;
+        {{value, {1, From, Replies}}, NewQueue} ->
+            safe_reply(From, lists:reverse([Value | Replies])),
+            NewQueue;
+        {{value, {N, From, Replies}}, NewQueue} when N > 1 ->
+            queue:in_r({N - 1, From, [Value | Replies]}, NewQueue);
+        {empty, Queue} ->
+            %% Oops
+            ?ERROR_MSG("Nothing in queue, but got value from parser~n"),
+            empty_queue
+    end.
+	
+safe_reply(undefined, _Value) ->
+    ok;
+safe_reply(From, Value) ->
+    gen_server:reply(From, Value).
+	
+handle_response(Measure) when is_record(Measure, measure) ->
+	ok.
+	
 
 handle_data({measure, DateTime, DataList}, #state{tid=Tid}) ->
 	?INFO("get measure from tid:~p",[Tid]),

@@ -49,10 +49,12 @@ init([]) ->
 
 open(Conn) ->
     {ok, Channel} = amqp:open_channel(Conn),
-	amqp:queue(Channel, <<"monitor">>),
+	amqp:queue(Channel, <<"monitor.inter">>),
+	amqp:queue(Channel, <<"command.inter">>),
     amqp:queue(Channel, <<"monitor.reply">>),
     amqp:consume(Channel, <<"monitor.reply">>, self()),
-	amqp:consume(Channel, <<"monitor">>),
+	amqp:consume(Channel, <<"monitor.inter">>),
+	amqp:consume(Channel, <<"command.inter">>),
     Channel.
 	
 handle_call({subscribe, Cid, WebSocket}, _From, #state{channel = Channel}=State) ->
@@ -86,7 +88,7 @@ handle_call(Msg, _From, State) ->
 	
 	
 handle_cast({dispatch, {monitor, Cid, _Data}=Payload}, State) ->
-	with_monitor(Cid, fun(Node) -> ?INFO("has already monitor:~p, in:~p", [Cid, Node]) end,
+	with_monitor(Cid, fun(Node) -> ?ERROR("has already monitor:~p, in:~p", [Cid, Node]) end,
 				fun() -> handle_monitor(Payload, State) end),
 	{noreply, State};	
 
@@ -109,11 +111,23 @@ handle_cast(Msg, State) ->
 	{noreply, State}.
 	
 	
-handle_info({deliver, <<"monitor">>, _Properties, Payload}, State) ->
+handle_info({deliver, <<"monitor.inter">>, _Properties, Payload}, State) ->
 	%TODO from web message
-	Payload2 = parse_monitor(Payload),
-	handle_monitor(Payload2, State),
+	% Payload2 = parse_monitor(Payload),
+	% handle_monitor(Payload2, State),
 	{noreply, State};	
+	
+handle_info({deliver, <<"command.inter">>, _Properties, Payload}, #state{channel = Channel}=State) ->
+	?ERROR("recv command :~p", [Payload]),
+	Data = mochijson2:decode(Payload, [{format, proplist}]),
+	?ERROR("recv command :~p", [Data]),
+	Cid = extbif:to_integer(proplists:get_value(<<"cid">>, Data)),
+	Type = proplists:get_value(<<"type">>, Data),
+	Params = proplists:get_value(<<"params">>, Data),
+	with_monitor(Cid, fun(undefined) -> e({no_monitored, Cid});
+					(Node) -> amqp:send(Channel, Node, term_to_binary({command, Cid, {Type, Params}}))
+					end),
+	{noreply, State};		
 	
 handle_info({deliver, <<"monitor.reply">>, _Properties, Payload}, State) ->
     ?INFO("get monitor reply :~p", [binary_to_term(Payload)]),
@@ -203,10 +217,7 @@ with_monitor(Cid, F, E) ->
             E();
         [#dispatch{node = Node}] ->
             F(Node)
-    end.
-		
-parse_monitor(_Payload) ->
-	ok.			
+    end.		
 
 e(E) -> {error, E}.
 		

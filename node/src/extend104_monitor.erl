@@ -63,6 +63,21 @@ handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} =
 			amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Node));
 		{sync, Cid} ->
 			extend104:sync(Cid);	
+		{command, Cid, Data} ->
+			Rest = case extend104:get_conn_pid(Cid) of
+				{ok, ConnPid} ->
+					try 
+						extend104_connection:command(ConnPid, Data)
+					catch 
+						Error:Reason -> 
+						{Error, Reason} 
+					end;
+				error ->
+					{error, no_conn}
+			end,
+			?INFO("command rest:~p", [Rest]),
+			amqp:send(Channel, <<"command.reply">>, extend104_util:to_string(Rest));
+				
         {unmonitor, Cid} ->
 			extend104:delete_conn(Cid);
 		{subscribe, Cid} -> % by node queue

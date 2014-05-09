@@ -25,7 +25,7 @@ start_link(CityId, ConnectionSup) ->
 	gen_server:start_link({local, ?MODULE}, ?MODULE, [CityId, ConnectionSup], []).
 	
 open_conn(ConnConf) ->
-	gen_server:call(?MODULE, {open_conn, ConnConf}).	
+	gen_server:call(?MODULE, {open_conn, ConnConf}, 10000).	
 	
 delete_conn(Cid) ->
 	gen_server:call(?MODULE, {delete_conn, Cid}).	
@@ -95,22 +95,21 @@ handle_call(Req, _From, State) ->
     {reply, {error, {invalid_request, Req}}, State}.
 	
 handle_cast({sync, Cid}, #state{map_cid_pid = MapCP} = State) ->
-	case dict:find(Cid, MapCP) of
-		{ok, Conn} ->
-			extend104_connection:send(Conn, 'C_IC_NA_1'),
-			extend104_connection:send(Conn, 'C_CI_NA_1'),
-			extend104_connection:send(Conn, 'C_CS_NA_1');
-		error ->
-			?ERROR("can not sync,no conn:~p", [Cid])
-	end,			
+	handle_sync(Cid, MapCP),		
 	{noreply, State};
 	
 handle_cast(_Msg, State) ->
 	{noreply, State}.
 	
 	
-handle_info({status, Cid, Connect} = Payload, #state{channel = Channel} = State) ->
+handle_info({status, Cid, Connect} = Payload, #state{channel = Channel, map_cid_pid = MapCP} = State) ->
 	amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Payload)),
+	case Connect of
+		connected ->
+			handle_sync(Cid, MapCP);
+		_ ->
+			ok
+	end,			
     {noreply, State};		
 	
 handle_info(Msg ,State) ->
@@ -125,6 +124,15 @@ terminate(_Reason, #state{cityid=CityId, channel=Channel}) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+
+handle_sync(Cid, MapCP) ->
+	case dict:find(Cid, MapCP) of
+		{ok, Conn} ->
+			extend104_connection:sync(Conn);
+		error ->
+			?ERROR("can not sync,no conn:~p", [Cid])
+	end.
 
 get_cid(ConnConf) ->
 	Cid = proplists:get_value(id, ConnConf),

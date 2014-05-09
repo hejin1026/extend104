@@ -24,19 +24,22 @@
 -define(FRAME_TESTFR_SEND, #extend104_frame{c1=16#43}).
 -define(FRAME_TESTFR_REPLY, #extend104_frame{c1=16#83}).
 
-%<<68, 16#0E, 00, 00, 06, 00, 64, 01, 06, 00, 01, 00, 00, 00, 00, 14>>),
--define(FRAME_C_IC_NA_1(Cid), #extend104_frame{payload = <<16#64, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
+%<<68, 16#0E, 00, 00, 06, 00, 64, 01, 06, 00, 01, 00, 00, 00, 00, 14>>) | 1,1,2,2 + 3,1
+-define(FRAME_100(Cid), #extend104_frame{payload = <<16#64, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
 
--define(FRAME_C_CI_NA_1(Cid), #extend104_frame{payload = <<16#65, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
+-define(FRAME_101(Cid), #extend104_frame{payload = <<16#65, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
 
--define(FRAME_C_CS_NA_1(Cid), #extend104_frame{payload = <<16#67, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
+-define(FRAME_103(Cid), #extend104_frame{payload = <<16#67, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
+
+% 针对测点 Data:2#10000001
+-define(FRAME_46(Cot, Cid, Data), #extend104_frame{payload = <<46, 01, Cot, 00, Cid/binary, 00, 00, 00, Data/binary>>}). 
 
 
 
 % ASDU Type
--define(C_CS_NA_1,		103).	% 时间同步
 -define(C_IC_NA_1,		100).	% 总召唤命令
 -define(C_CI_NA_1,		101).	% 电能脉冲计数量冻结命令/
+-define(C_CS_NA_1,		103).	% 时间同步
 
 -define(M_SP_NA_1,		1).	% 单点
 -define(M_ME_NA_1,		9).	% 测量值--归一化值
@@ -46,8 +49,12 @@
 
 
 % COT
--define(M_COT_ACTCON_1,     16#7). %激活确认
--define(M_COT_ACTTERM_1,    16#0A). %激活终止
+-define(M_COT_ACTIVE,		6). %去激活
+-define(M_COT_STOP, 		8). %停止激活
+
+-define(M_COT_ACTIVE_1,     7). %激活确认
+-define(M_COT_STOP_1,		9). %停止激活确认		
+-define(M_COT_ACTTERM_1,    10). %激活终止
 
 
 

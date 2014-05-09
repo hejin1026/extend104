@@ -28,48 +28,77 @@ parse(<<C1, C2, C3, C4, Payload/binary>>) ->
 serialise(Frame) when is_record(Frame, extend104_frame) ->
 	#extend104_frame{c1=C1, c2=C2, c3=C3, c4=C4, payload=Payload} = Frame,
 	Len = size(Payload) + 4,
-	<<16#68, Len, C1, C2, C3, C4, Payload/binary>>.
+	<<16#68, Len, C1, C2, C3, C4, Payload/binary>>;
+serialise(Frame) when is_record(Frame, extend104_asdu) ->
+	#extend104_asdu{type=Type, sq=SQ, vsq=VSQ, cot=COT, addr=Addr, data=Data} = Frame,	
+	<<Type, SQ:1,VSQ:7,COT:8, 0, Addr/binary, Data/binary>>.
 							
+% start_cont | stop_cont
 process_asdu(Frame = #extend104_frame{payload = <<>>}) ->
+	% TODO
 	?ERROR("empty ~p", [Frame]);
 process_asdu(#extend104_frame{payload = <<Type,SQ:1,VSQ:7,COT:8,_COT:1/binary,Addr:2/binary,Data/binary>>}) ->
 	ASDU = #extend104_asdu{type=Type, sq=SQ, vsq=VSQ, cot=COT, addr=extend104_util:reverse_byte(Addr), data=Data},
 	case process_asdu(Type, ASDU) of
 		ok -> ok;
-		{data, Data} ->
+		{response, {PAddr, DataF}} ->
+			{response, #measure{cid=reverse_byte_value(Addr), type=Type, no=reverse_byte_value(PAddr), cot=COT, value = DataF}};
+		{status, S} ->
+			{response, S};	
+		{data, DataF} ->
 			%TODO pare business data
-			?INFO("get data:~p,~p", [Type, Data]);
+			?INFO("get data:~p,~p", [Type, DataF]);
 		{datalist, DataList} ->
 			?INFO("get asdu:~p,data length:~p, ~n ~p", [ASDU#extend104_asdu{data= <<>>}, length(DataList) == VSQ, DataList]),
 			DataList1 = lists:map(fun({PAddr, Value}) ->
-				#measure{cid=reverse_byte_value(Addr),type=Type, no=reverse_byte_value(PAddr), cot=COT, value = Value}
+				#measure{cid=reverse_byte_value(Addr), type=Type, no=reverse_byte_value(PAddr), cot=COT, value = Value}
 			end, DataList),
 			{measure, DataList1}
 	end.
 	
-			
+%%----------------- 交互返回 			
 % 初始化结束
 process_asdu(?M_EI_NA_1, _ASDU) ->
-	?INFO_MSG("sub station reset!");
+	?INFO_MSG("sub station reset!");	
+	
 	
 % 100:总召确认 7	
-process_asdu(?C_IC_NA_1, #extend104_asdu{cot= ?M_COT_ACTCON_1} = ASDU) ->
-	?INFO("all confirm :~p",[ASDU]);	
+process_asdu(100, #extend104_asdu{cot= ?M_COT_ACTIVE_1} = ASDU) ->
+	?INFO("all confirm :~p",[ASDU]),
+	{status, confirm};
 % 100:总召结束 10
-process_asdu(?C_IC_NA_1, #extend104_asdu{cot= ?M_COT_ACTTERM_1} = ASDU) ->
-	?INFO("all over :~p",[ASDU]);	
-
+process_asdu(100, #extend104_asdu{cot= ?M_COT_ACTTERM_1} = ASDU) ->
+	?INFO("all over :~p",[ASDU]),
+	{status, over};
 % 101:计算量总召确认 7	
-process_asdu(?C_CI_NA_1, #extend104_asdu{cot= ?M_COT_ACTCON_1} = ASDU) ->
-	?INFO("all count confirm :~p",[ASDU]);	
+process_asdu(101, #extend104_asdu{cot= ?M_COT_ACTIVE_1} = ASDU) ->
+	?INFO("all count confirm :~p",[ASDU]),
+	{status, confirm};
 % 101:计算量总召结束 10	
-process_asdu(?C_CI_NA_1, #extend104_asdu{cot= ?M_COT_ACTTERM_1} = ASDU) ->
-	?INFO("all count over:~p",[ASDU]);				
+process_asdu(101, #extend104_asdu{cot= ?M_COT_ACTTERM_1} = ASDU) ->
+	?INFO("all count over:~p",[ASDU]),
+	{status, over};
 
 % 103:时钟同步确认 7
-process_asdu(?C_CS_NA_1, #extend104_asdu{cot= ?M_COT_ACTCON_1} = ASDU) ->
-	?INFO("all time confirm :~p",[ASDU]);		
+process_asdu(103, #extend104_asdu{cot= ?M_COT_ACTIVE_1} = ASDU) ->
+	?INFO("all time confirm :~p",[ASDU]),
+	{status, confirm};	
+	
+% 46:双点遥控 7
+process_asdu(46, #extend104_asdu{data = <<PAddr:3/binary,SE:1,QU:5,DCS:2>>} = ASDU) ->
+	?INFO("yk_46 :~p",[ASDU]),
+	{response, {PAddr, [{se,SE}, {dcs,DCS}]} };
+				
+% 52:设点命令 7
+process_asdu(52, #extend104_asdu{cot= ?M_COT_ACTIVE_1} = ASDU) ->
+	?INFO("all time confirm :~p",[ASDU]);			
+	
+% 55:调度命令 7
+process_asdu(55, #extend104_asdu{cot= ?M_COT_ACTIVE_1} = ASDU) ->
+	?INFO("all time confirm :~p",[ASDU]);					
 
+
+%%----------------- 非交互返回 
 % 1:单点NA
 process_asdu(?M_SP_NA_1, ASDU) ->
 	process_M_SP_NA(ASDU);
@@ -169,7 +198,7 @@ check_iv(0, Value, Acc) ->
 check_iv(1, Value, Acc) ->
 	?ERROR("invaild vaule:~p", [Value]),
 	Acc.	
-		
+
 
 % 130	
 process_130(1, <<StakeType,SerialNo:19/binary,StakeNo:17/binary,CardNo:4/binary, Begin:7/binary,CDType,
