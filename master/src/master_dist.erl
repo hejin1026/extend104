@@ -88,8 +88,7 @@ handle_call(Msg, _From, State) ->
 	
 	
 handle_cast({dispatch, {monitor, Cid, _Data}=Payload}, State) ->
-	with_monitor(Cid, fun(Node) -> ?ERROR("has already monitor:~p, in:~p", [Cid, Node]) end,
-				fun() -> handle_monitor(Payload, State) end),
+	handle_monitor(Payload, State),
 	{noreply, State};	
 
 handle_cast({dispatch, {sync, Cid}}, #state{channel = Channel}=State) ->
@@ -152,8 +151,9 @@ handle_monitor({monitor, Cid, Data}=Payload, #state{channel=Channel}) ->
     Payload2 = term_to_binary(Payload),
 	NodeId = master:get_queue(monitor, CityId),
 	?INFO("get nodeid:~p", [NodeId]),
-	with_monitor(Cid, fun(undefined) -> amqp:send(Channel, to_binary(NodeId), Payload2);
-						(Node) -> amqp:send(Channel, Node, Payload2) end, 
+	with_monitor(Cid, fun(undefined) -> ?ERROR("has already monitor, no reply:~p", [Cid]);
+						(Node) -> ?ERROR("has already monitor, send again:~p, in ~p", [Cid, Node]),
+								amqp:send(Channel, Node, Payload2) end, 
 			fun() -> 
 				amqp:send(Channel, to_binary(NodeId), Payload2),
             	mnesia:dirty_write(#dispatch{id = {monitor, Cid}}) 

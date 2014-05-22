@@ -21,6 +21,8 @@
 
 -define(MAX_CACHE, 1024*100).
 
+-import(extbif, [to_binary/1]).
+
 %Websocket long connect cid:self()=1:n
 
 init({tcp, http}, _Req, _Opts) ->
@@ -48,6 +50,7 @@ websocket_handle({text, <<"connection:", Cid/binary>>}, Req, State) ->
 	
 websocket_handle({text, <<"cache:", Cid/binary>>}, Req, #state{status=cache, cache=Queue} = State) ->
 	Data = string:join(queue:to_list(Queue), "\n"),
+	?INFO("cache data:~p", [Data]),
 	save_file(["data", "channel=" ++ binary_to_list(Cid)], "cache", Data),
 	{reply, {text, <<"cache over!">>}, Req, State#state{status=undefined, cache=queue:new(), count=0}};	
 						
@@ -64,7 +67,7 @@ websocket_info({timeout, _Ref, Msg}, Req, State) ->
 websocket_info({frame, Type, Time, Frame}, Req, State) ->
 	Data = extend104_util:bin_to_str(extend104_frame:serialise(Frame), 16),
 	% Resp = lists:concat([Type, ":", Data, "(", extbif:strftime(Time), ")"]),
-	Resp = [{time, extbif:strftime(Time)}, {type, Type}, {data, Data}],
+	Resp = [{time, to_binary(extbif:strftime(Time))}, {type, Type}, {data, to_binary(Data)}],
 	{reply, {text, jsonify(Resp)}, Req, handle_cache(Resp, State)};	
 websocket_info(_Info, Req, State) ->
 	?INFO("get info:~p, ~p", [self(), Req]),
@@ -97,7 +100,8 @@ save_file(Folder, Name, Data) ->
             filelib:ensure_dir(Dir),
             file:make_dir(Dir)
      end,
-     FileName = lists:concat([Name, '_', extbif:strftime(), ".txt"]),
+	 {H,MM,S} =  time(),
+     FileName = lists:concat([Name, '_', extbif:strfdate(date()), "_",H, MM, ".txt"]),
      ?INFO("create file :~p",[FileName]),
      File = filename:join([Dir, FileName]),
      case file:open(File, [append, raw]) of
@@ -105,7 +109,7 @@ save_file(Folder, Name, Data) ->
             ?INFO("write file: ~p",[File]),
             file:write(Fd, Data),
             file:close(Fd),
-			os:cmd(lists:concat(["mv ", File, " var/log/"]));
+			os:cmd(lists:concat(["scp ", File, " log/"]));
 			
         Error ->
             ?WARNING("file open error :~p", [Error]),
@@ -113,4 +117,4 @@ save_file(Folder, Name, Data) ->
      end.	
 	 
 jsonify(Term) ->
-    mochijson:encode(Term).
+    mochijson2:encode(Term).

@@ -47,7 +47,7 @@ config() ->
 			case master:ertdb(connect) of
 				ok ->
 					Sql = "select t3.id as cid, t1.* 
-							from term_measure t1, term_station t2, channel t3 
+							from term_measure t1, term_station t2, term_channel t3 
 							where t1.station_id=t2.id and t2.id=t3.station_id",
 					case emysql:sqlquery(Sql) of
 				        {ok, Records} ->
@@ -76,6 +76,10 @@ sync() ->
 			_:Err -> ?ERROR("dispatch error: ~p", [Err])
 		end
 	end).	
+	
+command(Cid, Key, Action, Order) ->
+	Payload = [{cid, Cid}, {type, 46}, {params, [{key, Key}, {action, Action}, {order, Order}]}],
+	master_dist ! {deliver, <<"command.inter">>, undefined, mochijson2:encode(Payload)} .	
 	
 		
 

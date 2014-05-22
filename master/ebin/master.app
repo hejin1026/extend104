@@ -5,7 +5,7 @@
               {applications,[kernel,stdlib]},
               {mod,{master_app,[]}},
               {env,[]},
-              {modules,[master,master_app,master_ctl,master_datalog,
-                        master_dist,master_http,master_httpd,master_sup,
-                        master_websocket,reloader,term,term_agent,term_stake,
-                        term_station]}]}.
+              {modules,[extend104_frame,extend104_util,master,master_app,
+                        master_ctl,master_datalog,master_dist,master_http,
+                        master_httpd,master_sup,master_websocket,reloader,
+                        term,term_agent,term_stake,term_station]}]}.

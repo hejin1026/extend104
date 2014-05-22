@@ -40,9 +40,10 @@
 -import(extbif, [to_list/1]).
 
 sync(C) ->
-	command(C, 'C_IC_NA_1'),
-	command(C, 'C_CI_NA_1'),
-	command(C, 'C_CS_NA_1').
+	?INFO_MSG("begin to sync"),
+	send(C, 'C_IC_NA_1'),
+	send(C, 'C_CI_NA_1'),
+	send(C, 'C_CS_NA_1').
 
 
 start_link(Server, Args) ->
@@ -88,13 +89,13 @@ do_init(Server, Args) ->
 	{ok, #state{server=Server, cid=Cid, tid=Tid, host=to_list(Host), port=Port, args=Args} }.	
 
 connect(State = #state{server=Server, cid=Cid, host=Host, port=Port}) ->
-	?INFO_MSG("begin to conn"),
+	?INFO("begin to conn:~p",[State]),
     case gen_tcp:connect(Host, Port, ?TCPOPTIONS, ?TIMEOUT) of 
     {ok, Sock} ->
 		?INFO("~p:~p is connected.", [Host, Port]),
 		send(self(), 'STARTDT'),
 		Server ! {status, Cid, connected},
-		{ok, State#state{socket = Sock, conn_state = connected}};
+		{ok, State#state{socket = Sock, conn_state = connected, queue = queue:new()}};
     {error, Reason} ->
 		?ERROR("failed to connect ~p:~p, error: ~p.", [Host, Port, Reason]),
 		Server ! {status, Cid, disconnect},
@@ -113,6 +114,7 @@ handle_call({command, Command}, From, #state{conn_state=ConnState} = State) ->
 				{error, Reason} = Error->
 					{reply, Error, State};	
 				Cmd ->
+					?ERROR("command send cmd:~p", [Cmd]),
 		    		do_request(Cmd, From, State)
 			end;		
 		_ ->
@@ -155,12 +157,12 @@ handle_cast(Msg, State) ->
 	
 handle_info({tcp, _Sock, Data}, #state{rest=Rest, timer=LastTimer}=State) ->
 	?INFO("get msg lenth:~p, ~p",[size(Data), Data]),
-	NewRest = check_frame(list_to_binary([Rest, Data]), State),
+	NewState = check_frame(list_to_binary([Rest, Data]), State),
 	if LastTimer == undefined -> ok;
 		true -> erlang:cancel_timer(LastTimer)
 	end,	
 	Timer = erlang:start_timer(20000, self(), heartbeat),
-    {noreply, State#state{rest=NewRest, timer = Timer}};
+    {noreply, NewState#state{timer = Timer}};
 
 handle_info({tcp_closed, Sock}, State=#state{socket=Sock}) ->
 	?ERROR_MSG("tcp closed."),
@@ -191,8 +193,9 @@ code_change(_OldVsn, State, _Extra) ->
 %%---------------- fun ------------------%%	
 do_request(Cmd, From, #state{conn_state = connected} = State) ->
     case send_frame(Cmd, State) of
-        ok ->
-            NewQueue = queue:in({1, From}, State#state.queue),
+        true ->
+			?INFO("after send :~p", [Cmd]),
+            NewQueue = queue:in({1, From, Cmd}, State#state.queue),
             {noreply, State#state{queue = NewQueue}};
         {error, Reason} ->
             {reply, {error, Reason}, State}
@@ -261,18 +264,18 @@ do_send_frame(Frame, #state{cid=Cid, socket = Sock,subscriber=Subs}) when is_rec
     erlang:port_command(Sock, extend104_frame:serialise(Frame)).	
 		
 	
-check_frame(<<>>, _State) -> <<>>;		
+check_frame(<<>>, State) -> State#state{rest = <<>>};		
 check_frame(<<16#68,L,Data/binary>> = Frames, State) ->
 	if L =< size(Data) ->
 		{FrameData, Rest} = split_binary(Data, L),
-		recv_frame(FrameData, State),
-		check_frame(Rest, State);	
+		NesState = recv_frame(FrameData, State),
+		check_frame(Rest, NesState);	
 	true ->
-		Frames
+		State#state{rest = Frames}
 	end;		
-check_frame(Rest, _State) ->
+check_frame(Rest, State) ->
 	?ERROR("get error msg:~p",[Rest]), 
-	<<>>.		
+	State#state{rest = <<>>}.		
 	
 recv_frame(FrameData, #state{cid=Cid, subscriber=Subs}=State) ->
 	Frame = extend104_frame:parse(FrameData),
@@ -288,11 +291,14 @@ process_frame(#extend104_frame{c1 = C1} = Frame, State) ->
 	Tag1 == 0 -> 
 		process_apci_i(Frame, State);
 	Tag2 == 1 ->
-		process_apci_s(Frame);
+		process_apci_s(Frame),
+		State;
 	Tag2 == 3 ->
-		process_apci_u(Frame, State);
+		process_apci_u(Frame, State),
+		State;
 	true ->
-		?ERROR("unsupport apci....~p", [Frame])
+		?ERROR("unsupport apci....~p", [Frame]),
+		State
 	end.
 
 process_apci_i(Frame, State) ->
@@ -301,28 +307,31 @@ process_apci_i(Frame, State) ->
 	confirm_frame(State),
 	DateTime = extbif:timestamp(),
 	case extend104_frame:process_asdu(Frame) of
-		ok -> ok;
+		ok -> State;
 		{response, Res} ->
 			% Resp = handle_response(Res),
-			reply(Res, State);
+			NewQueue = reply(Res, State),
+			State#state{queue = NewQueue};
 		{measure, DataList} ->
-			handle_data({measure, DateTime, DataList}, State)
+			handle_data({measure, DateTime, DataList}, State),
+			State
 	end.		
 
 reply(Value, #state{queue = Queue} = State) ->
     case queue:out(Queue) of
-        {{value, {1, From}}, NewQueue} ->
+        {{value, {1, From, Cmd}}, NewQueue} ->
+			?INFO("reply:~p, ~p", [Cmd, Value]),
             safe_reply(From, Value),
             NewQueue;
-        {{value, {1, From, Replies}}, NewQueue} ->
+        {{value, {1, From, Cmd, Replies}}, NewQueue} ->
             safe_reply(From, lists:reverse([Value | Replies])),
             NewQueue;
-        {{value, {N, From, Replies}}, NewQueue} when N > 1 ->
+        {{value, {N, From, Cmd, Replies}}, NewQueue} when N > 1 ->
             queue:in_r({N - 1, From, [Value | Replies]}, NewQueue);
         {empty, Queue} ->
             %% Oops
-            ?ERROR_MSG("Nothing in queue, but got value from parser~n"),
-            empty_queue
+            ?ERROR("Nothing in queue, but got value from parser:~p", [Value]),
+            Queue
     end.
 	
 safe_reply(undefined, _Value) ->
