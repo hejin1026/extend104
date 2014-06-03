@@ -12,7 +12,7 @@
 -export([load/0]).
 
 load() ->
-	Sql = "select t2.id as tid, t1.* from channels t1 ,term_station t2  
+	Sql = "select t2.id as tid, t2.address, t1.* from channels t1 ,term_station t2  
            where t1.channel_type =0 and t2.id=t1.station_id ",
 	case emysql:sqlquery(Sql) of
         {ok, Records} ->

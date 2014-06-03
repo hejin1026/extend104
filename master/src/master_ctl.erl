@@ -32,12 +32,34 @@ run() ->
 		end
 	end).
 	
-config() ->	
+	
+node_config() ->
 	Config = fun(Record) ->
 			?INFO("record :~p", [Record]),
 			Cid = proplists:get_value(cid, Record),
-			No = proplists:get_value(no, Record),
-			Category = proplists:get_value(category, Record),
+			Key = proplists:get_value(key, Record),
+			Ptype = proplists:get_value(ptype, Record),
+			master_dist:dispatch({config, Cid, Key, [{ptype, Ptype}]})
+		end,
+	spawn(fun() ->
+			Sql = "select t3.id as cid, t1.ptype, t1.key 
+					from term_measure t1, term_station t2, channels t3 
+					where t1.station_id=t2.id and t2.id=t3.station_id and t1.ptype is not null",
+			case emysql:sqlquery(Sql) of
+		        {ok, Records} ->
+		            lists:foreach(Config, Records),
+		            ?ERROR("finish from station ~p: ~p ~n", [?MODULE, length(Records)]);
+		        {error, Reason}  ->
+		            ?ERROR("start failure...~p",[Reason]),
+		            stop
+			end
+				
+		end).			
+		
+	
+ertdb_config() ->	
+	Config = fun(Record) ->
+			?INFO("record :~p", [Record]),
 			Key = proplists:get_value(key, Record),
 			Value = build_config(Record, []),
 			Cmd = ["config", Key, Value],
@@ -47,7 +69,7 @@ config() ->
 			case master:ertdb(connect) of
 				ok ->
 					Sql = "select t3.id as cid, t1.* 
-							from term_measure t1, term_station t2, term_channel t3 
+							from term_measure t1, term_station t2, channels t3 
 							where t1.station_id=t2.id and t2.id=t3.station_id",
 					case emysql:sqlquery(Sql) of
 				        {ok, Records} ->
@@ -63,6 +85,7 @@ config() ->
 			end
 		end).	
 	
+	
 sync() ->
 	Dispatch = fun(Cid) ->
 		master_dist:dispatch({sync, Cid})
@@ -77,6 +100,8 @@ sync() ->
 		end
 	end).	
 	
+
+%% test	
 command(Cid, Key, Action, Order) ->
 	Payload = [{cid, Cid}, {type, 46}, {params, [{key, Key}, {action, Action}, {order, Order}]}],
 	master_dist ! {deliver, <<"command.inter">>, undefined, mochijson2:encode(Payload)} .	
@@ -97,7 +122,11 @@ build_key(Cid, Type, No) ->
 	list_to_binary(lists:concat([Cid, ":", Type, ":", No])).	
 	
 build_config([], Acc) ->
-	 string:join([lists:concat([K, "=", strnum(V)]) || {K, V} <- Acc], ",");	
+	string:join([lists:concat([K, "=", strnum(V)]) || {K, V} <- Acc], ",");	
+build_config([{vaild, Value}|Data], Acc) ->
+	build_config(Data, [{vaild, Value}|Acc]);		 
+build_config([{quality, Value}|Data], Acc) ->
+	build_config(Data, [{quality, Value}|Acc]);		 	
 build_config([{coef, Value}|Data], Acc) ->	
 	build_config(Data, [{coef, Value}|Acc]);
 build_config([{offset, Value}|Data], Acc) ->	
@@ -118,6 +147,7 @@ build_config([{his_mintime, Value}|Data], Acc) ->
 	build_config(Data, [{his_mintime, Value}|Acc]);			
 build_config([_|Data], Acc) ->
 	build_config(Data, Acc).	
+		
 	
 strnum(V) when is_integer(V) ->
     integer_to_list(V);

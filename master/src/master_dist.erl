@@ -90,6 +90,12 @@ handle_call(Msg, _From, State) ->
 handle_cast({dispatch, {monitor, Cid, _Data}=Payload}, State) ->
 	handle_monitor(Payload, State),
 	{noreply, State};	
+	
+handle_cast({dispatch, {config, Cid, Key, Data}=Payload},  #state{channel = Channel}=State) ->
+	with_monitor(Cid, fun(undefined) -> e({no_monitored, Cid});
+					(Node) -> amqp:send(Channel, Node, term_to_binary(Payload))
+					end),
+	{noreply, State};	
 
 handle_cast({dispatch, {sync, Cid}}, #state{channel = Channel}=State) ->
 	with_monitor(Cid, fun(undefined) -> e({no_monitored, Cid});

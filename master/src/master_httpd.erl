@@ -5,7 +5,7 @@
 %%%----------------------------------------------------------------------
 -module(master_httpd).
 
--author('hejin').
+-author('hejin 2013-10-28').
 
 -include_lib("elog/include/elog.hrl").
 

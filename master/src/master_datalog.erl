@@ -28,6 +28,8 @@
 start_link() ->
     gen_server2:start_link({local, ?MODULE}, ?MODULE, [], []).
 	
+	
+% test for datalist, because no ertdb that time	
 get_measure(Measure) ->
 	gen_server2:call(?MODULE, {get_measure, Measure}).		
 		
@@ -44,6 +46,7 @@ open(Conn) ->
     amqp:consume(Channel, <<"measure.datalog">>, self()),
 	amqp:consume(Channel, <<"server.datalog">>, self()),
     Channel.
+
 
 handle_call({get_measure, {Cid, MeaType, MeaNo}}, _From, State) ->
 	Meas = case MeaType of
@@ -83,6 +86,18 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+	
+handle_data({datalog, Key, Datalog}) ->
+    case emysql:insert(stat_measure, Datalog) of
+        {updated, {1, Id}} ->
+            ?INFO("insert datalog key:~p", [Key]);
+        {updated, {0, _}} ->
+            ?WARNING("cannot find inserted: ~p ~p",  [Datalog]);
+        {error, Reason} ->
+            ?ERROR("Key : ~p,Datalog :~p, ~n Reason: ~p", [Key, Datalog, Reason]);
+        _ ->
+            ok
+    end;
 
 handle_data({measure, Cid, DateTime, Datalist}) ->
 	lists:foreach(fun(Meas) ->
