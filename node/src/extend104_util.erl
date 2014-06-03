@@ -2,17 +2,26 @@
 
 -create("hejin 2013-10-18").
 
--export([reverse_int_value/1,reverse_byte_value/1, reverse_byte_value2/1, reverse_byte/1, 
-		add_cn/1, bin_to_str/2, to_string/1]).
+-export([reverse_int_value/1,reverse_int_value/2, reverse_byte_value/1, reverse_byte_value2/1, reverse_byte/1, 
+		add_cn/1, bin_to_str/2, to_string/1, decode_key/1]).
 
 -export([b2a/1]).
 
 
 %int -> overturn byte
 reverse_int_value(Int) ->
-	Low = Int band 16#ff,
-	High = (Int bsr 8) band 16#ff,
-	<<Low, High>>. 
+	reverse_int_value(Int, 2).
+	
+reverse_int_value(Int, N) ->
+	reverse_int_value(Int, N, []).
+	
+reverse_int_value(Int, 0, Acc) ->
+	list_to_binary(Acc);	
+	
+reverse_int_value(Int, N, Acc) ->	
+	N1 = N - 1,
+	B = (Int bsr (N1 * 8)) band 16#ff,
+	reverse_int_value(Int, N1, [B|Acc]).
 
 %overturn byte -> int
 reverse_byte_value(Bin) ->
@@ -59,10 +68,13 @@ zeropad(I) ->
     I.	
 
 b2a(Binary) ->
-  list_to_atom(binary_to_list(Binary)).
+  	list_to_atom(binary_to_list(Binary)).
 	
 to_string(T)  ->
     lists:flatten(io_lib:format("~p", [T])).	
+	
+decode_key(Key) ->
+	string:tokens(Key, ":").
 	
 	
 	

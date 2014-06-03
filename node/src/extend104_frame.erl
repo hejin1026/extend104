@@ -41,10 +41,10 @@ process_asdu(#extend104_frame{payload = <<Type,SQ:1,VSQ:7,COT:8,_COT:1/binary,Ad
 	ASDU = #extend104_asdu{type=Type, sq=SQ, vsq=VSQ, cot=COT, addr=extend104_util:reverse_byte(Addr), data=Data},
 	case process_asdu(Type, ASDU) of
 		ok -> ok;
-		{response, {PAddr, DataF}} ->
-			{response, #measure{cid=reverse_byte_value(Addr), type=Type, no=reverse_byte_value(PAddr), cot=COT, value = DataF}};
+		{response, CommandData} ->
+			{response, CommandData};
 		{status, S} ->
-			{response, S};	
+			{response, {status, S} };	
 		{data, DataF} ->
 			%TODO pare business data
 			?INFO("get data:~p,~p", [Type, DataF]);
@@ -64,16 +64,14 @@ process_asdu(?M_EI_NA_1, _ASDU) ->
 	
 % 100:总召确认 7	
 process_asdu(100, #extend104_asdu{cot= ?M_COT_ACTIVE_1} = ASDU) ->
-	?INFO("all confirm :~p",[ASDU]),
-	{status, confirm};
+	?INFO("all confirm :~p",[ASDU]);
 % 100:总召结束 10
 process_asdu(100, #extend104_asdu{cot= ?M_COT_ACTTERM_1} = ASDU) ->
 	?INFO("all over :~p",[ASDU]),
 	{status, over};
 % 101:计算量总召确认 7	
 process_asdu(101, #extend104_asdu{cot= ?M_COT_ACTIVE_1} = ASDU) ->
-	?INFO("all count confirm :~p",[ASDU]),
-	{status, confirm};
+	?INFO("all count confirm :~p",[ASDU]);
 % 101:计算量总召结束 10	
 process_asdu(101, #extend104_asdu{cot= ?M_COT_ACTTERM_1} = ASDU) ->
 	?INFO("all count over:~p",[ASDU]),
@@ -85,17 +83,19 @@ process_asdu(103, #extend104_asdu{cot= ?M_COT_ACTIVE_1} = ASDU) ->
 	{status, confirm};	
 	
 % 46:双点遥控 7
-process_asdu(46, #extend104_asdu{data = <<PAddr:3/binary,SE:1,QU:5,DCS:2>>} = ASDU) ->
+process_asdu(46, #extend104_asdu{cot=Cot, data = Data} = ASDU) ->
 	?INFO("yk_46 :~p",[ASDU]),
-	{response, {PAddr, [{se,SE}, {dcs,DCS}]} };
+	{response, {data, Cot, Data}};
 				
 % 52:设点命令 7
-process_asdu(52, #extend104_asdu{cot= ?M_COT_ACTIVE_1} = ASDU) ->
-	?INFO("all time confirm :~p",[ASDU]);			
+process_asdu(52, #extend104_asdu{cot=Cot, data = Data} = ASDU) ->
+	?INFO("sd_52 :~p",[ASDU]),
+	{response, {data, Cot, Data}};			
 	
 % 55:调度命令 7
-process_asdu(55, #extend104_asdu{cot= ?M_COT_ACTIVE_1} = ASDU) ->
-	?INFO("all time confirm :~p",[ASDU]);					
+process_asdu(55, #extend104_asdu{cot=Cot, data = Data} = ASDU) ->
+	?INFO("dd_55 :~p",[ASDU]),					
+	{response, {data, Cot, Data}};
 
 
 %%----------------- 非交互返回 
@@ -146,8 +146,7 @@ process_asdu(Type, Payload) ->
 process_M_SP_NA(#extend104_asdu{sq=0, data=Data}) ->
 	process_M_SP_NA(0, Data, []);
 process_M_SP_NA(#extend104_asdu{sq=1, data = <<PAddr:3/binary,Other/binary>>}) ->
-	RPAddr = extend104_util:reverse_byte(PAddr),	
-	[{RPAddr, process_M_SP_NA(1, Other, [])}].
+	[{PAddr, process_M_SP_NA(1, Other, [])}].
 
 % content
 process_M_SP_NA(_SQ, <<>>, Acc) ->
@@ -232,5 +231,8 @@ process_136(3, <<CardNO:16/binary,PW:8/binary,StakeNo:17/binary,DBZ:4/binary,DBF
 	{data, []};		
 process_136(4, _) ->
 	{data, []}.	
-			
+
+
+
+
 	

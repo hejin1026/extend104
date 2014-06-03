@@ -20,6 +20,14 @@ status() ->
 	
 state(Type) ->
     sys:get_status(list_to_atom(Type)).
+
+conn_status(Cid) ->
+	extend104:conn_status(list_to_integer(Cid)).
+	
+lookup(Key) ->
+	extend104_hub:lookup(list_to_binary(Key)).	
+	
+	
 	
 	
 %% set %%

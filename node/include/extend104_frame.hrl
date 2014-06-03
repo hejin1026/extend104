@@ -26,7 +26,7 @@
 -define(FRAME_TESTFR_SEND, #extend104_frame{c1=16#43}).
 -define(FRAME_TESTFR_REPLY, #extend104_frame{c1=16#83}).
 
-%<<68, 16#0E, 00, 00, 06, 00, 64, 01, 06, 00, 01, 00, 00, 00, 00, 14>>) | 1,1,2,2 + 3,1
+%<<68, 16#0E, 00, 00, 06, 00, 100, 01, 06, 00, 01, 00, 00, 00, 00, 14>>) | 6,1,1,2,2 + 3,1
 -define(FRAME_100(Cid), #extend104_frame{payload = <<16#64, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
 
 -define(FRAME_101(Cid), #extend104_frame{payload = <<16#65, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
@@ -34,7 +34,9 @@
 -define(FRAME_103(Cid), #extend104_frame{payload = <<16#67, 01, 06, 00, Cid/binary, 00, 00, 00, 16#14>>}).
 
 % 针对测点 Data:2#10000001
--define(FRAME_46(Cot, Cid, Data), #extend104_frame{payload = <<46, 01, Cot, 00, Cid/binary, 00, 00, 00, Data/binary>>}). 
+-define(FRAME_46(Cot, Taddr, Maddr, Data), #extend104_frame{payload = <<46, 01, Cot, 00, Taddr/binary, Maddr/binary, Data/binary>>}). 
+-define(FRAME_52(Cot, Taddr, Maddr, Data, SE), #extend104_frame{payload = <<52, 01, Cot, 00, Taddr/binary, Maddr/binary, Data:32/float, SE:1,0:7>>}). 
+-define(FRAME_55(Cot, Taddr, MI,OV,IN, BDS), #extend104_frame{payload = <<55, 01, Cot, 00, Taddr/binary, 00, 00, 00, MI:1,OV:1,IN:6, BDS>>}). 
 
 
 

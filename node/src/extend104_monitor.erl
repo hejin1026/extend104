@@ -61,22 +61,27 @@ handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} =
             Node = {monitored, Cid, get_monet_query(), node()},
 			extend104:open_conn(Data),			
 			amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Node));
+		{config, _Cid, Key, Data} ->
+			extend104_hub:config(Key, Data);		
 		{sync, Cid} ->
 			extend104:sync(Cid);	
-		{command, Cid, Data} ->
+		{command, Cid, {Type, Params}} ->
 			Rest = case extend104:get_conn_pid(Cid) of
 				{ok, ConnPid} ->
-					try 
-						extend104_connection:command(ConnPid, Data)
-					catch 
-						Error:Reason -> 
-						{Error, Reason} 
+					try extend104_connection:command(ConnPid, {Type, Params}) of
+						{error, Reason} ->
+							{result, Reason};
+						Other ->
+							Other
+					catch Error:Reason -> 
+						?ERROR("command timeout:~p", [Reason]),
+						{result, timeout} 
 					end;
 				error ->
-					{error, no_conn}
+					{result, no_conn}
 			end,
-			?INFO("command rest:~p", [Rest]),
-			amqp:send(Channel, <<"command.reply">>, extend104_util:to_string(Rest));
+			?INFO("command rest:~p", [[Rest|Params]]),
+			amqp:send(Channel, <<"command.reply">>, mochijson2:encode([Rest|Params]));
 				
         {unmonitor, Cid} ->
 			extend104:delete_conn(Cid);
