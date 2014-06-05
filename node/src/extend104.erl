@@ -132,12 +132,10 @@ handle_cast(_Msg, State) ->
 	
 handle_info({status, Cid, Connect} = Payload, #state{channel = Channel, map_cid_pid = MapCP} = State) ->
 	case Connect of
-		connected ->
-			amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Payload));
-		start ->
+		start -> % call need time
 			handle_sync(Cid, MapCP);
 		_ ->
-			ok
+			amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Payload))
 	end,			
     {noreply, State};		
 	

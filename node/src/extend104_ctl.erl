@@ -4,6 +4,7 @@
 %%%----------------------------------------------------------------------
 -module(extend104_ctl).
 
+-include("extend104.hrl").
 -include_lib("elog/include/elog.hrl").
 
 -compile(export_all).
@@ -27,7 +28,13 @@ conn_status(Cid) ->
 lookup(Key) ->
 	extend104_hub:lookup(list_to_binary(Key)).	
 	
-	
+
+% test
+% ./bin/node -sname node1 send_data 2 15 2 151834
+send_data(Tid, Type, No, Value) ->
+	DateTime = extbif:timestamp(),
+	Data = #measure{type=list_to_integer(Type), no = list_to_integer(No), value = list_to_integer(Value)},
+	extend104_hub:send_datalog({measure, 2, DateTime, [Data]}). 
 	
 	
 %% set %%

@@ -1,4 +1,6 @@
 
 -record(measure_id, {cid, type, no}).
 
--record(measure, {cid, type, no, cot, value}).
+
+
+-record(measure, {address, type, no, cot, value}).

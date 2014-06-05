@@ -63,7 +63,7 @@ handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} =
 			amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Node));
 		{config, _Cid, Key, Data} ->
 			extend104_hub:config(Key, Data);		
-		{sync, Cid} ->
+		{sync, Cid} -> 
 			extend104:sync(Cid);	
 		{command, Cid, {Type, Params}} ->
 			Rest = case extend104:get_conn_pid(Cid) of
@@ -74,7 +74,7 @@ handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} =
 						Other ->
 							Other
 					catch Error:Reason -> 
-						?ERROR("command timeout:~p", [Reason]),
+						?ERROR("command timeout:~p,~p", [Reason, erlang:get_stacktrace()]),
 						{result, timeout} 
 					end;
 				error ->

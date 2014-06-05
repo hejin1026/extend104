@@ -39,12 +39,14 @@ node_config() ->
 			Cid = proplists:get_value(cid, Record),
 			Key = proplists:get_value(key, Record),
 			Ptype = proplists:get_value(ptype, Record),
-			master_dist:dispatch({config, Cid, Key, [{ptype, Ptype}]})
+			Coef = proplists:get_value(coef, Record),
+			Offset = proplists:get_value(offset, Record),
+			master_dist:dispatch({config, Cid, Key, [{ptype, Ptype}, {coef, Coef}, {offset, Offset}]})
 		end,
 	spawn(fun() ->
-			Sql = "select t3.id as cid, t1.ptype, t1.key 
+			Sql = "select t3.id as cid, t1.ptype, t1.key, t1.coef, t1.offset
 					from term_measure t1, term_station t2, channels t3 
-					where t1.station_id=t2.id and t2.id=t3.station_id and t1.ptype is not null",
+					where t1.station_id=t2.id and t2.id=t3.station_id and t1.ptype in (280,999,230,100)",
 			case emysql:sqlquery(Sql) of
 		        {ok, Records} ->
 		            lists:foreach(Config, Records),

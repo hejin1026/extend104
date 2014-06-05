@@ -24,7 +24,7 @@
 
 -record(state, {channel, ertdb}).
 
--record(last, {key, type, ptype, time, value}).
+-record(last, {key, type, ptype, coef, time, value}).
 
 -import(extbif, [to_atom/1]).
 
@@ -64,10 +64,16 @@ handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 	
 handle_call({config, Key, Data}, From, State) ->
-	?INFO("insert config:~p", [Key]),
+	?INFO("insert config:~p, ~p", [Key,Data]),
 	Ptype = proplists:get_value(ptype, Data),
+	Coef = proplists:get_value(coef, Data),
 	Type = format_ptype(Ptype),
-	Rest = ets:insert(last, #last{key=Key, type=Type, ptype=Ptype}),
+	Rest = case ets:lookup(last, Key) of
+		[] ->
+			ets:insert(last, #last{key=Key, type=Type, ptype=Ptype, coef=Coef});
+		Config ->
+			ets:insert(last, Config#last{key=Key, type=Type, ptype=Ptype, coef=Coef})
+		end,		
 	{reply, Rest, State};	
 
 handle_call(Req, _From, State) ->
@@ -75,7 +81,7 @@ handle_call(Req, _From, State) ->
     {reply, {badreq, Req}, State}.
 
 handle_cast({measure, Tid, DateTime, DataList}, #state{channel = Channel, ertdb=Client} = State) ->
-    ?INFO("send datalog: ~p, ~p",[Tid,DateTime, DataList]),
+    ?INFO("send datalog: ~p, ~p, ~p",[Tid,DateTime, DataList]),
 	lists:foreach(fun(Meas) ->
 		Key = build_key(Tid, Meas#measure.type, Meas#measure.no),
 		Cmd = ["insert", Key, DateTime, Meas#measure.value],
@@ -83,26 +89,33 @@ handle_cast({measure, Tid, DateTime, DataList}, #state{channel = Channel, ertdb=
 		
 		%% for stat
 	    case ets:lookup(last, Key) of
-		    [#last{type=Type, ptype=Ptype, time=LastTime, value=LastValue} = Config] -> 
-			Interval = DateTime - LastTime,
-				if Interval > 0 ->
-					try format_value(Type, Interval, LastValue, Meas#measure.value) of
-						{insert, Value} ->
-							ets:insert(last, Config#last{time=DateTime, value=Meas#measure.value}),
-							Datalog = [{key, Key}, {station_id, Tid}, {ptype, Ptype}, {time, DateTime}, {value, Value}],
-							amqp:send(Channel, <<"measure.datalog">>, term_to_binary({datalog, Key, Datalog}));
-						insert ->
-							ets:insert(last, #last{key=Key, type=Type, time=DateTime, value=Meas#measure.value});	
-						ignore ->
-							?WARNING("ignore value:~p, ~p", [Meas#measure.value, Config])
-		            catch
-		                _:Err ->
-		                    ?ERROR("err: ~p, type: ~p, key: ~p, ~p", [Err, Type, Key, erlang:get_stacktrace()]),
-		                    []
-		            end;			
+		    [#last{type=Type, ptype=Ptype, coef=Coef, time=LastTime, value=LastValue} = Config] -> 
+				if(LastTime == undefined) ->
+					?INFO("insert first:~p,~p", [Meas#measure.value, Config]),
+					ets:insert(last, Config#last{time=DateTime, value=Meas#measure.value});	
 				true ->
-					?WARNING("~p: interval < 0", [Key])
-				end;				
+					Interval = DateTime - LastTime,
+					if Interval > 0 ->
+						try format_value(Type, Coef, Interval, LastValue, Meas#measure.value) of
+							{insert, Value} ->
+								?INFO("insert value:~p, ~p", [Meas#measure.value, Config]),
+								ets:insert(last, Config#last{time=DateTime, value=Meas#measure.value}),
+								Datalog = [{ekey, Key},{station_id, Tid},{ptype, Ptype},{time, extbif:datetime(DateTime)},{value, Value}],
+								amqp:send(Channel, <<"measure.datalog">>, term_to_binary({datalog, Key, Datalog}));
+							insert ->
+								?INFO("insert datalog:~p, ~p", [Meas#measure.value, Config]),
+								ets:insert(last, Config#last{time=DateTime, value=Meas#measure.value});	
+							ignore ->
+								?WARNING("ignore value:~p, ~p", [Meas#measure.value, Config])
+			            catch
+			                _:Err ->
+			                    ?ERROR("err: ~p, type: ~p, key: ~p, ~p", [Err, Type, Key, erlang:get_stacktrace()]),
+			                    []
+			            end;			
+					true ->
+						?WARNING("~p: interval < 0", [Key])
+					end
+				end;					
 		    [] -> ok
 	    end
 		
@@ -138,29 +151,33 @@ format_ptype(100) -> dev;
 format_ptype(_Value) -> none.
 
 %% status : 1 -> 0 记录 | 0 -> 1 忽略
-format_value(status, Interval, LastValue, Value) ->
+format_value(status, Coef, Interval, LastValue, Value) ->
 	case Value of
 		LastValue ->
+			%TODO should ignore
+			{insert, 0};
+		_ ->
 			case Value of
-				"0" -> 
+				0 -> 
 					if(Interval > 60 * 10) ->
 						{insert, 1};
 					true ->
 						insert
 					end;
-				"1" ->
-					insert
-			end;	
-		_ ->
-			ignore
+				1 ->
+					insert;
+				_ ->
+					?ERROR("invaild status value:~p", [Value, LastValue]),
+					ignore	
+			end
 	end;	
-format_value(dev, Interval, LastValue, Value) ->	
+format_value(dev, Coef, Interval, LastValue, Value) ->	
 	Dev = extbif:to_integer(Value) - extbif:to_integer(LastValue),
-	if(Dev > 0) ->
-		{insert, Dev};
+	if(Dev >= 0) -> %TODO should > 
+		{insert, Dev * Coef};
 	true ->
 		ignore
 	end;		
-format_value(_Type, Interval, LastValue, Value) ->
+format_value(_Type, Coef, Interval, LastValue, Value) ->
 	ignore.
 	

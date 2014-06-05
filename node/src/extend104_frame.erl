@@ -47,20 +47,16 @@ process_asdu(#extend104_frame{payload = <<Type,SQ:1,VSQ:7,COT:8,_COT:1/binary,Ad
 			{response, {status, S} };	
 		{data, DataF} ->
 			%TODO pare business data
-			?INFO("get data:~p,~p", [Type, DataF]);
+			?ERROR("get data:~p,~p", [Type, DataF]);
 		{datalist, DataList} ->
 			?INFO("get asdu:~p,data length:~p, ~n ~p", [ASDU#extend104_asdu{data= <<>>}, length(DataList) == VSQ, DataList]),
 			DataList1 = lists:map(fun({PAddr, Value}) ->
-				#measure{cid=reverse_byte_value(Addr), type=Type, no=reverse_byte_value(PAddr), cot=COT, value = Value}
+				#measure{address=reverse_byte_value(Addr), type=Type, no=reverse_byte_value(PAddr), cot=COT, value = Value}
 			end, DataList),
 			{measure, DataList1}
 	end.
 	
 %%----------------- 交互返回 			
-% 初始化结束
-process_asdu(?M_EI_NA_1, _ASDU) ->
-	?INFO_MSG("sub station reset!");	
-	
 	
 % 100:总召确认 7	
 process_asdu(100, #extend104_asdu{cot= ?M_COT_ACTIVE_1} = ASDU) ->

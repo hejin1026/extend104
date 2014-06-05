@@ -36,7 +36,7 @@
 % 针对测点 Data:2#10000001
 -define(FRAME_46(Cot, Taddr, Maddr, Data), #extend104_frame{payload = <<46, 01, Cot, 00, Taddr/binary, Maddr/binary, Data/binary>>}). 
 -define(FRAME_52(Cot, Taddr, Maddr, Data, SE), #extend104_frame{payload = <<52, 01, Cot, 00, Taddr/binary, Maddr/binary, Data:32/float, SE:1,0:7>>}). 
--define(FRAME_55(Cot, Taddr, MI,OV,IN, BDS), #extend104_frame{payload = <<55, 01, Cot, 00, Taddr/binary, 00, 00, 00, MI:1,OV:1,IN:6, BDS>>}). 
+-define(FRAME_55(Num, Cot, Taddr, SE, MI,OV,IN, BDS), #extend104_frame{payload = <<55, Num, Cot, 00, Taddr/binary, SE:1,MI:1,OV:1,IN:5, BDS/binary>>}). 
 
 
 
@@ -49,7 +49,6 @@
 -define(M_ME_NA_1,		9).	% 测量值--归一化值
 -define(M_ME_NB_1,      11).% 测量值--标度化值
 -define(M_IT_NA_1,		15).% 电能脉冲计数量帧
--define(M_EI_NA_1,      70).    % 初始化结束
 
 
 % COT
