@@ -7,6 +7,7 @@
 -behavior(gen_server).
 
 -include_lib("elog/include/elog.hrl").
+-include_lib("amqp_client/include/amqp_client.hrl").
 
 -export([start_link/0,
 		dispatch/1,
@@ -122,16 +123,34 @@ handle_info({deliver, <<"monitor.inter">>, _Properties, Payload}, State) ->
 	% handle_monitor(Payload2, State),
 	{noreply, State};	
 	
-handle_info({deliver, <<"command.inter">>, _Properties, Payload}, #state{channel = Channel}=State) ->
-	?ERROR("recv command :~p", [Payload]),
+handle_info({deliver, <<"command.inter">>, Properties, Payload}, #state{channel = Channel}=State) ->
+	?ERROR("recv command :~p, msg:~p", [Properties, Payload]),
 	Data = mochijson2:decode(Payload, [{format, proplist}]),
-	?ERROR("recv command :~p", [Data]),
 	Cid = extbif:to_integer(proplists:get_value(<<"cid">>, Data)),
 	Type = proplists:get_value(<<"type">>, Data),
 	Params = proplists:get_value(<<"params">>, Data),
-	with_monitor(Cid, fun(undefined) -> e({no_monitored, Cid});
-					(Node) -> amqp:send(Channel, Node, term_to_binary({command, Cid, {Type, Params}}))
-					end),
+	CorrelationId = proplists:get_value(correlation_id, Properties),
+	ReplyTo = proplists:get_value(reply_to, Properties),
+	ReplyFun = fun(Result) ->
+		    Props = #'P_basic'{correlation_id = CorrelationId},
+			Response = mochijson2:encode([{result, Result}|Params]),
+		    Publish = #'basic.publish'{exchange = <<>>,
+		                               routing_key = ReplyTo,
+		                               mandatory = true},
+		    amqp_channel:call(Channel, Publish, #amqp_msg{props = Props,
+		                                                  payload = list_to_binary(Response)})
+		end,
+	
+	with_monitor(Cid, fun(undefined) -> ReplyFun(nomonitor_reply);
+					(Node) -> 
+						NewPayload = term_to_binary({command, Cid, {Type, Params}}),
+					    Props = #'P_basic'{correlation_id = CorrelationId,
+					                       content_type = <<"application/octet-stream">>,
+					                       reply_to = ReplyTo},
+					    Publish = #'basic.publish'{routing_key = extbif:to_binary(Node), mandatory = true},
+					    amqp_channel:call(Channel, Publish, #amqp_msg{props = Props,payload = NewPayload})
+					end, 
+					fun() -> ReplyFun(nomonitor_cid) end),
 	{noreply, State};		
 	
 handle_info({deliver, <<"monitor.reply">>, _Properties, Payload}, State) ->
