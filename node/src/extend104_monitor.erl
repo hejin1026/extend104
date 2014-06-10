@@ -5,6 +5,7 @@
 -module(extend104_monitor).
 
 -include_lib("elog/include/elog.hrl").
+-include_lib("amqp_client/include/amqp_client.hrl").
 
 -export([start_link/1, send/1]).
 
@@ -54,7 +55,7 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 
-handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} = State) ->
+handle_info({deliver, RoutingKey, Header, Payload}, #state{channel = Channel} = State) ->
     ?INFO("get from quene :~p,~p", [RoutingKey, binary_to_term(Payload)]),
     case binary_to_term(Payload) of
         {monitor, Cid, Data} -> % By CityId Queue
@@ -81,7 +82,15 @@ handle_info({deliver, RoutingKey, _Header, Payload}, #state{channel = Channel} =
 					{result, no_conn}
 			end,
 			?INFO("command rest:~p", [[Rest|Params]]),
-			amqp:send(Channel, <<"command.reply">>, mochijson2:encode([Rest|Params]));
+			CorrelationId = proplists:get_value(correlation_id, Header),
+			ReplyTo = proplists:get_value(reply_to, Header),
+			Response = mochijson2:encode([Rest|Params]),
+		    Properties = #'P_basic'{correlation_id = CorrelationId},
+		    Publish = #'basic.publish'{exchange = <<>>,
+		                               routing_key = ReplyTo,
+		                               mandatory = true},
+		    amqp_channel:call(Channel, Publish, #amqp_msg{props = Properties,
+		                                                  payload = list_to_binary(Response)});
 				
         {unmonitor, Cid} ->
 			extend104:delete_conn(Cid);
