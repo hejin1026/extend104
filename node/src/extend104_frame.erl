@@ -44,7 +44,7 @@ process_asdu(#extend104_frame{payload = <<Type,SQ:1,VSQ:7,COT:8,_COT:1/binary,Ad
 		{response, CommandData} ->
 			{response, CommandData};
 		{status, S} ->
-			{response, {status, S} };	
+			{response, {status, S} };
 		{data, DataF} ->
 			%TODO pare business data
 			?ERROR("get data:~p,~p", [Type, DataF]);
@@ -191,7 +191,7 @@ process_M_IT_NA(1, <<Value:4/binary, IV:1, CA:1, CY:1,SQ:5,Other/binary>>, Acc) 
 check_iv(0, Value, Acc) ->
 	[Value|Acc];
 check_iv(1, Value, Acc) ->
-	?ERROR("invaild vaule:~p", [Value]),
+	% ?ERROR("invaild vaule:~p", [Value]),
 	Acc.	
 
 

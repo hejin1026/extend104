@@ -51,9 +51,13 @@
 
 sync(C) ->
 	?INFO_MSG("begin to sync"),
-	command(C, 'C_IC_NA_1', 16000),
-	command(C, 'C_CI_NA_1', 16000),
-	send(C, 'C_CS_NA_1').
+	try 	
+		command(C, 'C_IC_NA_1', 30000),
+		command(C, 'C_CI_NA_1', 30000),
+		send(C, 'C_CS_NA_1')
+	catch Error:Reason -> 
+		?ERROR("sync timeout:~p,~p", [Reason, erlang:get_stacktrace()])
+	end.
 
 
 start_link(Server, Args) ->
@@ -192,12 +196,12 @@ handle_info({tcp, _Sock, Data}, #state{rest=Rest, timer=LastTimer}=State) ->
 handle_info({tcp_closed, Sock}, #state{socket=Sock} = State) ->
 	?ERROR_MSG("tcp closed."),
 	% reconnect
-	{ok, NState} =  connect(State),
-    {noreply, NState};
+	erlang:send_after(3000, self(), reconnect),
+    {noreply, State#state{conn_state = disconnect}};
 	
 handle_info({tcp_error, _Socket, _Reason}, State) ->
     %% This will be followed by a close
-    {noreply, State};	
+    {noreply, State};
 
 handle_info(reconnect, State) ->
 	{ok, NState} =  connect(State),
@@ -222,10 +226,12 @@ handle_info({timeout, _Timer, heartbeat}, State) ->
             {noreply, State}
     end;
 
-handle_info({heartbeat_timeout, Cmd}, State) ->	
+handle_info({heartbeat_timeout, Cmd}, #state{socket=Sock} = State) ->
 	% reconnect
-	{ok, NState} =  connect(State),
-    {noreply, NState};	
+	?INFO("heartbeat_timeout, cmd;~p, ~n ~p", [Cmd, State]),
+	gen_tcp:close(Sock),
+	% {ok, NState} =  connect(State),
+    {noreply, State};	
 
 handle_info({command_timeout, Cmd, From}, #state{queue = Queue} = State) ->
     NQ = case queue:out(Queue) of
@@ -412,7 +418,13 @@ send_frame(Frame, #state{conn_state = ConnState} = State) ->
 do_send_frame(Frame, #state{cid=Cid, socket = Sock,subscriber=Subs}) when is_record(Frame, extend104_frame) ->
 	?INFO("send msg:~p", [extend104_frame:serialise(Frame)]),
 	[SPid ! {frame, Cid, {send, calendar:local_time(), Frame}} ||SPid <- Subs],
-    erlang:port_command(Sock, extend104_frame:serialise(Frame)).	
+    case (catch erlang:port_command(Sock, extend104_frame:serialise(Frame))) of
+		true ->
+			true;
+		Reason ->
+		    ?ERROR("failed to send ~p, ~p",[Frame, Reason]),
+			{error, Reason}
+	end.	
 		
 	
 check_frame(<<>>, State) -> State#state{rest = <<>>};		
@@ -445,8 +457,7 @@ process_frame(#extend104_frame{c1 = C1} = Frame, State) ->
 		process_apci_s(Frame),
 		State;
 	Tag2 == 3 ->
-		process_apci_u(Frame, State),
-		State;
+		process_apci_u(Frame, State);
 	true ->
 		?ERROR("unsupport apci....~p", [Frame]),
 		State

@@ -35,22 +35,23 @@ run() ->
 	
 node_config() ->
 	Config = fun(Record) ->
-			?INFO("record :~p", [Record]),
 			Cid = proplists:get_value(cid, Record),
 			Key = proplists:get_value(key, Record),
+			Type = proplists:get_value(type, Record),
 			Ptype = proplists:get_value(ptype, Record),
 			Coef = proplists:get_value(coef, Record),
 			Offset = proplists:get_value(offset, Record),
-			master_dist:dispatch({config, Cid, Key, [{ptype, Ptype}, {coef, Coef}, {offset, Offset}]})
+			master_dist:dispatch({config, Cid, Key, [{ptype, Ptype}, {type, Type}, {coef, Coef}, {offset, Offset}]})
 		end,
 	spawn(fun() ->
-			Sql = "select t3.id as cid, t1.ptype, t1.key, t1.coef, t1.offset
-					from term_measure t1, term_station t2, channels t3 
-					where t1.station_id=t2.id and t2.id=t3.station_id and t1.ptype in (280,999,230,100)",
+			Sql = "select t3.id as cid, t1.ptype, t4.type, t1.key, t1.coef, t1.offset
+					from term_measure t1, term_station t2, channels t3 , measure_types t4
+					where t1.station_id=t2.id and t2.id=t3.station_id and t4.id=t1.ptype and t4.type is not null",
 			case emysql:sqlquery(Sql) of
 		        {ok, Records} ->
+					?ERROR("start node config ~p: ~p ~n", [?MODULE, length(Records)]),
 		            lists:foreach(Config, Records),
-		            ?ERROR("finish from station ~p: ~p ~n", [?MODULE, length(Records)]);
+		            ?ERROR("finish node config ~p: ~p ~n", [?MODULE, length(Records)]);
 		        {error, Reason}  ->
 		            ?ERROR("start failure...~p",[Reason]),
 		            stop
@@ -60,8 +61,7 @@ node_config() ->
 		
 	
 ertdb_config() ->	
-	Config = fun(Record) ->
-			?INFO("record :~p", [Record]),
+	 Fun = fun(Record) ->
 			Key = proplists:get_value(key, Record),
 			Value = build_config(Record, []),
 			Cmd = ["config", Key, Value],
@@ -72,21 +72,33 @@ ertdb_config() ->
 				ok ->
 					Sql = "select t3.id as cid, t1.* 
 							from term_measure t1, term_station t2, channels t3 
-							where t1.station_id=t2.id and t2.id=t3.station_id",
+							where t1.station_id=t2.id and t2.id=t3.station_id and t1.valid=1",
 					case emysql:sqlquery(Sql) of
 				        {ok, Records} ->
-				            lists:foreach(Config, Records),
-				            ?ERROR("finish from station ~p: ~p ~n", [?MODULE, length(Records)]);
+							?ERROR("start ertdb config ~p: ~p ~n", [?MODULE, length(Records)]),
+							split_and_sleep(Records, 60, Fun),
+				            ?ERROR("finish ertdb config ~p: ~p~n", [?MODULE, length(Records)]);
 				        {error, Reason}  ->
-				            ?ERROR("start failure...~p",[Reason]),
+				            ?ERROR("ertdb config failure...~p",[Reason]),
 				            stop
 					end,
 					master:ertdb(close);
 				{error, Reason} ->
-					?ERROR("ertdb connect error:~p", [Reason])	
+					?ERROR("ertdb connect error:~p", [Reason])
 			end
 		end).	
-	
+		
+		
+
+split_and_sleep([], _N, _F) ->
+    ok;
+split_and_sleep(L, N, F) when(length(L) < N)->
+	lists:foreach(F, L);
+split_and_sleep(L, N, F) ->
+	{L1, L2} = lists:split(N, L),
+	lists:foreach(F, L1),
+	timer:sleep(300),
+	split_and_sleep(L2, N, F).
 	
 sync() ->
 	Dispatch = fun(Cid) ->
@@ -134,7 +146,7 @@ build_config([{coef, Value}|Data], Acc) ->
 build_config([{offset, Value}|Data], Acc) ->	
 	build_config(Data, [{offset, Value}|Acc]);		 
 build_config([{deviation, Value}|Data], Acc) ->	
-	build_config(Data, [{dev, Value}|Acc]);
+	build_config(Data, [{dev, Value * 0.01}|Acc]);
 build_config([{maxtime, Value}|Data], Acc) ->
 	build_config(Data, [{maxtime, Value}|Acc]);	
 build_config([{mintime, Value}|Data], Acc) ->
@@ -142,7 +154,7 @@ build_config([{mintime, Value}|Data], Acc) ->
 build_config([{his_compress, Value}|Data], Acc) ->
 	build_config(Data, [{compress, Value}|Acc]);	
 build_config([{his_deviation, Value}|Data], Acc) ->
-	build_config(Data, [{his_dev, Value}|Acc]);			
+	build_config(Data, [{his_dev, Value * 0.01}|Acc]);			
 build_config([{his_maxtime, Value}|Data], Acc) ->
 	build_config(Data, [{his_maxtime, Value}|Acc]);	
 build_config([{his_mintime, Value}|Data], Acc) ->

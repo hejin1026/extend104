@@ -92,7 +92,7 @@ handle_info({deliver, <<"node.reply">>, _Properties, Payload}, State) ->
 	{noreply, State};
 
 handle_info({deliver, <<"agent.reply">>, _Properties, Payload}, State) ->
-    ?ERROR("get reply :~p", [binary_to_term(Payload)]),
+    % ?ERROR("get reply :~p", [binary_to_term(Payload)]),
     handle_agent(binary_to_term(Payload)),
 	{noreply, State};
 
@@ -119,14 +119,19 @@ handle_nodeid(Other) ->
 	
 	
 get_queue(monitor, CityId) ->
-    NodeId = get_one_nodeid({node_id, to_list(CityId)}),
-    NodeId ++ ".monitor".	
+    case get_one_nodeid({node_id, to_list(CityId)}) of
+		false ->
+			false;
+		NodeId ->
+			NodeId ++ ".monitor"
+	end.		
 
 get_one_nodeid({Type, CityId}) ->
     NodeIds = get_all_nodeid({Type, CityId}),
     case NodeIds of
         [] ->
-            ?ERROR("no node id ~p", [{Type, CityId}]), [];
+            ?ERROR("no node id ~p", [{Type, CityId}]), 
+			false;
         _ ->
             {{Type, Id}, _} = lists:nth(random:uniform(length(NodeIds)), NodeIds),
             Id

@@ -175,13 +175,18 @@ handle_monitor({monitor, Cid, Data}=Payload, #state{channel=Channel}) ->
     CityId = proplists:get_value(cityid, Data),
     Payload2 = term_to_binary(Payload),
 	NodeId = master:get_queue(monitor, CityId),
-	?INFO("get nodeid:~p", [NodeId]),
+	?ERROR("get nodeid:~p", [NodeId]),
 	with_monitor(Cid, fun(undefined) -> ?ERROR("has already monitor, no reply:~p", [Cid]);
 						(Node) -> ?ERROR("has already monitor, send again:~p, in ~p", [Cid, Node]),
 								amqp:send(Channel, Node, Payload2) end, 
 			fun() -> 
-				amqp:send(Channel, to_binary(NodeId), Payload2),
-            	mnesia:dirty_write(#dispatch{id = {monitor, Cid}}) 
+				case NodeId of
+					false ->
+						?ERROR("no node for monitor:~p", [Cid]);
+					_ ->	
+						amqp:send(Channel, to_binary(NodeId), Payload2),
+						mnesia:dirty_write(#dispatch{id = {monitor, Cid}}) 
+				end		
 			end).	
 		
 

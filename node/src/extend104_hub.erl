@@ -66,12 +66,12 @@ handle_call(stop, _From, State) ->
 handle_call({config, Key, Data}, From, State) ->
 	?INFO("insert config:~p, ~p", [Key,Data]),
 	Ptype = proplists:get_value(ptype, Data),
+	Type = proplists:get_value(type, Data),
 	Coef = proplists:get_value(coef, Data),
-	Type = format_ptype(Ptype),
 	Rest = case ets:lookup(last, Key) of
 		[] ->
 			ets:insert(last, #last{key=Key, type=Type, ptype=Ptype, coef=Coef});
-		Config ->
+		[Config] ->
 			ets:insert(last, Config#last{key=Key, type=Type, ptype=Ptype, coef=Coef})
 		end,		
 	{reply, Rest, State};	
@@ -144,14 +144,8 @@ build_key(Cid, Type, No) ->
 	list_to_binary(lists:concat([Cid, ":", Type, ":", No])).
 
 
-format_ptype(280) -> status;	
-format_ptype(999) -> status;	
-format_ptype(230) -> dev;	
-format_ptype(100) -> dev;	
-format_ptype(_Value) -> none.
-
 %% status : 1 -> 0 记录 | 0 -> 1 忽略
-format_value(status, Coef, Interval, LastValue, Value) ->
+format_value(<<"status">>, Coef, Interval, LastValue, Value) ->
 	case Value of
 		LastValue ->
 			%TODO should ignore
@@ -171,13 +165,14 @@ format_value(status, Coef, Interval, LastValue, Value) ->
 					ignore	
 			end
 	end;	
-format_value(dev, Coef, Interval, LastValue, Value) ->	
+format_value(<<"dev">>, Coef, Interval, LastValue, Value) ->	
 	Dev = extbif:to_integer(Value) - extbif:to_integer(LastValue),
 	if(Dev >= 0) -> %TODO should > 
 		{insert, Dev * Coef};
 	true ->
 		ignore
 	end;		
-format_value(_Type, Coef, Interval, LastValue, Value) ->
+format_value(Type, Coef, Interval, LastValue, Value) ->
+	?WARNING("unsupport type:~p", [Type]),
 	ignore.
 	
