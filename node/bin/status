@@ -23,8 +23,8 @@ echo "num:$NODE_NUM"
 
 for (( i =0; i < $NODE_NUM; i++ ))
 do
-    echo "starting $NODE_NAME${i}..."
-    $RUNNER_SCRIPT_DIR/node -sname $NODE_NAME${i} start
+    echo "status $NODE_NAME${i}..."
+    $RUNNER_SCRIPT_DIR/node -sname $NODE_NAME${i} status
 done
 
 

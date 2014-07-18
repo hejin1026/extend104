@@ -6,7 +6,12 @@ RUNNER_ETC_DIR=$RUNNER_BASE_DIR/etc
 VMARGS_PATH="$RUNNER_ETC_DIR/node.args"
 
 # Extract the target node name from node.args
-NODE_NAME=node
+NODE_NAME=`grep '^-pname' $VMARGS_PATH|awk '{print $2}'`
+if [ -z "$NODE_NAME" ]; then
+    echo "args needs to have a -pname parameter."
+    exit 1
+fi
+echo "pname:$NODE_NAME"
 
 # Extract the target cookie
 NODE_NUM=`grep '^-num' $VMARGS_PATH|awk '{print $2}'`
