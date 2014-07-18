@@ -64,7 +64,8 @@ handle_call(ertdb_close, _From, #state{ertdb = Client}=State) ->
 	ertdb_client:stop(Client),
 	{reply, ok, State#state{ertdb=undefined}};	
 	
-handle_call({config, _Cmd}, _From, #state{ertdb=undefined}=State) ->	
+handle_call({config, _Cmd}, _From, #state{ertdb=undefined}=State) ->
+	?ERROR("no ertdb conn for config...",[]),	
 	{reply, {error, unconn}, State};
 	
 handle_call({config, Cmd}, _From, #state{ertdb=Client}=State) ->

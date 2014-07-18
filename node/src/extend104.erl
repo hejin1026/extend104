@@ -69,7 +69,7 @@ handle_connect(ConnConf, #state{connection_sup = ConnSup, map_cid_pid=MapCP} = S
     case extend104_connection_sup:start_connection(ConnSup, ConnConf) of
         {ok, ConnPid} ->
 			Cid = get_cid(ConnConf),
-			?INFO("add cid:~p", [Cid]),	
+			?INFO("add cid:~p", [Cid]),
 			{reply, {ok, ConnPid}, State#state{map_cid_pid=dict:store(Cid, ConnPid, MapCP)}};
         {error, Error} ->
             ?ERROR("get conn error: ~p, ~p", [Error, ConnConf]),
@@ -90,8 +90,9 @@ handle_call({conn_status, Cid}, _From, #state{map_cid_pid=MapCP} = State) ->
 handle_call({open_conn, ConnConf}, _From, #state{map_cid_pid=MapCP} = State) ->
 	Cid = get_cid(ConnConf),
 	case dict:find(Cid, MapCP) of
-		{ok, _ConnPid} ->
-			{reply, {ok, already_conn}, State};
+		{ok, ConnPid} ->
+			extend104_connection:update(ConnPid, ConnConf),
+			{reply, {ok, update_conn}, State};
 		error ->	
 			handle_connect(ConnConf, State)
 	end;
@@ -123,7 +124,7 @@ handle_cast({config, Cid, Key, Data}, #state{map_cid_pid = MapCP} = State) ->
 	{noreply, State};
 	
 handle_cast({sync, Cid}, #state{map_cid_pid = MapCP} = State) ->
-	handle_sync(Cid, MapCP),		
+	% handle_sync(Cid, MapCP),
 	{noreply, State};
 	
 handle_cast(_Msg, State) ->
@@ -135,7 +136,7 @@ handle_info({status, Cid, Connect} = Payload, #state{channel = Channel, map_cid_
 		start -> % call need time
 			handle_sync(Cid, MapCP);
 		_ ->
-			amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Payload))
+			amqp:send(Channel, <<"monitor.reply">>, term_to_binary({status, Cid, calendar:local_time(), Connect}))
 	end,			
     {noreply, State};		
 	

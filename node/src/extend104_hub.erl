@@ -65,15 +65,19 @@ handle_call(stop, _From, State) ->
 	
 handle_call({config, Key, Data}, From, State) ->
 	?INFO("insert config:~p, ~p", [Key,Data]),
-	Ptype = proplists:get_value(ptype, Data),
-	Type = proplists:get_value(type, Data),
-	Coef = proplists:get_value(coef, Data),
-	Rest = case ets:lookup(last, Key) of
-		[] ->
-			ets:insert(last, #last{key=Key, type=Type, ptype=Ptype, coef=Coef});
-		[Config] ->
-			ets:insert(last, Config#last{key=Key, type=Type, ptype=Ptype, coef=Coef})
-		end,		
+	Rest = case proplists:get_value(type, Data) of
+		'undefined' ->
+			ets:delete(last, Key);
+		Type ->	
+			Ptype = proplists:get_value(ptype, Data),
+			Coef = proplists:get_value(coef, Data),
+			case ets:lookup(last, Key) of
+				[] ->
+					ets:insert(last, #last{key=Key, type=Type, ptype=Ptype, coef=Coef});
+				[Config] ->
+					ets:insert(last, Config#last{key=Key, type=Type, ptype=Ptype, coef=Coef})
+			end
+	end,					
 	{reply, Rest, State};	
 
 handle_call(Req, _From, State) ->
@@ -173,6 +177,6 @@ format_value(<<"dev">>, Coef, Interval, LastValue, Value) ->
 		ignore
 	end;		
 format_value(Type, Coef, Interval, LastValue, Value) ->
-	?WARNING("unsupport type:~p", [Type]),
+	?INFO("unsupport type:~p", [Type]),
 	ignore.
 	

@@ -10,13 +10,14 @@
 
 -export([start_link/2,
 		status/1,
+		update/2,
 		send/2,
 		subscribe/2,
 		unsubscribe/2,
 		command/2, command/3
 		]).
 		
--export([sync/1]).		
+-export([sync/1, async/1]).		
 
 -behaviour(gen_server2).
 
@@ -29,6 +30,9 @@
 		%{reuseaddr, true}]).
 
 -define(TIMEOUT, 8000).
+
+-define(TIME15, 15 * 60 * 1000).
+-define(TIME25, 25 * 60 * 1000).
 
 -record(state, {server, cid, tid, address, host, port, args, 
 				socket, 
@@ -53,11 +57,17 @@ sync(C) ->
 	?INFO_MSG("begin to sync"),
 	try 	
 		command(C, 'C_IC_NA_1', 30000),
+		erlang:send_after(?TIME15, self(), {sync, ?TIME15, 'C_IC_NA_1'}),
 		command(C, 'C_CI_NA_1', 30000),
+		erlang:send_after(?TIME25, self(), {sync, ?TIME25, 'C_CI_NA_1'}),
 		send(C, 'C_CS_NA_1')
 	catch Error:Reason -> 
 		?ERROR("sync timeout:~p,~p", [Reason, erlang:get_stacktrace()])
 	end.
+	
+async(C) ->
+	send(C, 'C_IC_NA_1'),
+	send(C, 'C_CI_NA_1').	
 
 
 start_link(Server, Args) ->
@@ -71,6 +81,10 @@ subscribe(C, SPid) ->
 	
 unsubscribe(C, SPid) ->
 	gen_server2:call(C, {unsubscribe, SPid}).		
+	
+update(C, Req) ->
+	gen_server2:cast(C, {update, Req}).
+		
 
 -spec command(C :: pid(), Command :: {'C_DC_NA_1', list()}) -> ok.
 command(C, Command)	->
@@ -86,21 +100,24 @@ send(C, Req) when is_pid(C) and is_atom(Req) ->
 
 init([Server, Args]) ->
 	?INFO("conn info:~p", [Args]),
-    case (catch do_init(Server, Args)) of
-	{error, Reason} ->
+    case (catch do_init(Args)) of
+	{'EXIT', Reason} ->
 	    {stop, Reason};
 	{ok, State} ->
-		connect(State)
+		connect(State#state{server=Server})
     end.
 	
 	
-do_init(Server, Args) ->
+do_init(Args) ->
+	do_init(Args, #state{}).
+	
+do_init(Args, State) ->	
 	Cid = proplists:get_value(id, Args),
 	Tid = proplists:get_value(tid, Args),
 	Address = proplists:get_value(address, Args),
 	Host = proplists:get_value(ip, Args),
 	Port = proplists:get_value(port, Args),
-	{ok, #state{server=Server, cid=Cid, tid=Tid, address=Address, host=to_list(Host), port=Port, args=Args} }.	
+	{ok, State#state{cid=Cid, tid=Tid, address=Address, host=to_list(Host), port=Port, args=Args} }.	
 	
 do_init_c() ->
 	put(recv_c,0),
@@ -174,6 +191,15 @@ handle_call(Req, _From, State) ->
     ?WARNING("unexpect request: ~p,~p", [Req, State]),
     {reply, {error, invalid_request}, State}.
 
+
+handle_cast({update, Data}, State) ->
+    case (catch do_init(Data, State)) of
+		{'EXIT', Reason} ->
+			?ERROR("update error:~p, ~n ~p", [Reason, Data]),
+			{noreply, State};
+		{ok, NewState} ->
+			{noreply, NewState}
+    end;
 	
 handle_cast({request, Req}, #state{conn_state=connected} = State) ->
 	Cmd = handle_cmd(Req, State),
@@ -206,6 +232,13 @@ handle_info({tcp_error, _Socket, _Reason}, State) ->
 handle_info(reconnect, State) ->
 	{ok, NState} =  connect(State),
     {noreply, NState};
+
+handle_info({sync, Time, Command}, State) ->
+	?INFO("sync,time:~p, cmd:~p", [Time, Command]),
+	Cmd = handle_cmd(Command, State),
+    send_frame(Cmd, State),
+	erlang:send_after(Time, self(), {sync, Time, Command}),
+    {noreply, State};
 
 handle_info({timeout, _Timer, heartbeat}, State) ->
 	Cmd = ?FRAME_TESTFR_SEND,
@@ -255,6 +288,8 @@ handle_info(Info, State) ->
 	
 prioritise_info({command_timeout, Cmd, From}, _State) ->
     9;
+prioritise_info({heartbeat_timeout, Cmd, From}, _State) ->
+    9;	
 prioritise_info(_, _State) ->
     0.	
 

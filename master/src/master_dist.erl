@@ -12,7 +12,7 @@
 -export([start_link/0,
 		dispatch/1,
 		subscribe/2,
-		unsubscribe/2
+		unsubscribe/1, unsubscribe/2
 		]).
 
 -export([init/1, 
@@ -33,6 +33,9 @@ dispatch(Payload) ->
 	
 subscribe(Cid, WebSocket) ->
 	gen_server2:call(?MODULE, {subscribe, Cid, WebSocket}).	
+
+unsubscribe(Cid) ->
+	gen_server2:call(?MODULE, {unsubscribe, Cid}).
 	
 unsubscribe(Cid, WebSocket) ->
 	gen_server2:call(?MODULE, {unsubscribe, Cid, WebSocket}).		
@@ -52,10 +55,12 @@ open(Conn) ->
     {ok, Channel} = amqp:open_channel(Conn),
 	amqp:queue(Channel, <<"monitor.inter">>),
 	amqp:queue(Channel, <<"command.inter">>),
+	amqp:queue(Channel, <<"measure.inter">>),
     amqp:queue(Channel, <<"monitor.reply">>),
     amqp:consume(Channel, <<"monitor.reply">>, self()),
 	amqp:consume(Channel, <<"monitor.inter">>),
 	amqp:consume(Channel, <<"command.inter">>),
+	amqp:consume(Channel, <<"measure.inter">>),
     Channel.
 	
 handle_call({subscribe, Cid, WebSocket}, _From, #state{channel = Channel}=State) ->
@@ -63,8 +68,16 @@ handle_call({subscribe, Cid, WebSocket}, _From, #state{channel = Channel}=State)
 					fun(undefined) -> e({no_monitored, Cid});
 						(Node) ->
 							amqp:send(Channel, Node, term_to_binary({subscribe, Cid})),
-							ets:insert(cid_wb, {Cid, WebSocket}),ok
+							ets:insert(cid_wb, {Cid, WebSocket})
 						end),
+	{reply, Reply, State};		
+	
+handle_call({unsubscribe, Cid}, _From, #state{channel = Channel}=State) ->
+	Reply = with_monitor(Cid, fun(undefined) -> e({no_monitored, Cid});
+							(Node) ->
+			            		amqp:send(Channel, Node, term_to_binary({unsubscribe, Cid})),
+								ets:delete(cid_wb, Cid) 
+							end),
 	{reply, Reply, State};		
 
 handle_call({unsubscribe, Cid, WebSocket}, _From, #state{channel = Channel}=State) ->
@@ -104,12 +117,8 @@ handle_cast({dispatch, {sync, Cid}}, #state{channel = Channel}=State) ->
 					end),
 	{noreply, State};		
 	
-handle_cast({dispatch, {unmonitor, Cid}}, #state{channel = Channel}=State) ->
-	with_monitor(Cid, fun(undefined) -> e({no_monitored, Cid});
-					(Node) -> 
-						amqp:send(Channel, Node, term_to_binary({unmonitor, Cid})),
-						mnesia:dirty_delete(dispatch, {monitor, Cid})
-					end),
+handle_cast({dispatch, {unmonitor, Cid}}, State) ->
+	handle_unmonitor({unmonitor, Cid}, State),
 	{noreply, State};
 		
 handle_cast(Msg, State) ->
@@ -117,13 +126,30 @@ handle_cast(Msg, State) ->
 	{noreply, State}.
 	
 	
+handle_info({deliver, <<"measure.inter">>, _Properties, Payload}, State) ->
+	%TODO from web message
+	?ERROR("recv measure web:~p", [Payload]),
+	Data = mochijson2:decode(Payload, [{format, proplist}]),
+	master_ctl:ertdb_config(Data),
+	{noreply, State};	
+	
 handle_info({deliver, <<"monitor.inter">>, _Properties, Payload}, State) ->
 	%TODO from web message
-	% Payload2 = parse_monitor(Payload),
-	% handle_monitor(Payload2, State),
+	?ERROR("recv monitor web:~p", [Payload]),
+	Data = mochijson2:decode(Payload, [{format, proplist}]),
+	Cid = extbif:to_integer(proplists:get_value(<<"cid">>, Data)),
+	Type = proplists:get_value(<<"type">>, Data),
+	Params = proplists:get_value(<<"params">>, Data),
+	case Type of
+		<<"add">> ->
+			handle_monitor({monitor, Cid, Params}, State);
+		<<"delete">> ->
+			handle_unmonitor({unmonitor, Cid}, State)
+	end,		
 	{noreply, State};	
 	
 handle_info({deliver, <<"command.inter">>, Properties, Payload}, #state{channel = Channel}=State) ->
+	%TODO from web message
 	?ERROR("recv command :~p, msg:~p", [Properties, Payload]),
 	Data = mochijson2:decode(Payload, [{format, proplist}]),
 	Cid = extbif:to_integer(proplists:get_value(<<"cid">>, Data)),
@@ -188,6 +214,13 @@ handle_monitor({monitor, Cid, Data}=Payload, #state{channel=Channel}) ->
 						mnesia:dirty_write(#dispatch{id = {monitor, Cid}}) 
 				end		
 			end).	
+			
+handle_unmonitor({unmonitor, Cid}, #state{channel=Channel}) ->
+	with_monitor(Cid, fun(undefined) -> e({no_monitored, Cid});
+					(Node) -> 
+						amqp:send(Channel, Node, term_to_binary({unmonitor, Cid})),
+						mnesia:dirty_delete(dispatch, {monitor, Cid})
+					end).		
 		
 
 handle_reply({monitored, Cid, MonitorQ, Node}, _State) ->
@@ -202,7 +235,9 @@ handle_reply({monitored, Cid, MonitorQ, Node}, _State) ->
                mnesia:dirty_write(#dispatch{id={monitor, Cid}, node=MonitorQ})
 			end);
 			
-handle_reply({status, Cid, Connect}, _State) ->
+handle_reply({status, Cid, Time, Connect}, #state{channel=Channel}) ->
+	%% 转发到亭子里去了
+	amqp:send(Channel, <<"pavilion.reply">>, term_to_binary({status, Cid, Time, Connect})),
 	update_channel(Cid, [{connect_status, Connect}]);
     
 handle_reply({frame, Cid, {Type, Time, Frame}}, #state{channel=Channel}) ->

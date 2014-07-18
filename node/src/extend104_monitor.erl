@@ -121,7 +121,7 @@ handle_info({deliver, RoutingKey, Header, Payload}, #state{channel = Channel} = 
     {noreply, State};
 	
 handle_info({frame, Cid, {Type, Time, Frame}} = Payload, #state{channel = Channel} = State) ->
-	amqp:send(Channel, <<"monitor.reply">>, term_to_binary(Payload)),
+	amqp:send(Channel, <<"pavilion.reply">>, term_to_binary(Payload)),
 	{noreply, State};
 
 handle_info({'EXIT', Pid, Reason}, State) ->

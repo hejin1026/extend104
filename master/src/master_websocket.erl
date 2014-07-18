@@ -38,7 +38,7 @@ websocket_handle({text, <<"connection:", Cid/binary>>}, Req, State) ->
 		Result = master_dist:subscribe(binary_to_integer(Cid), self()),
 		?INFO("subscribe:~p", [Result]),
 		case Result of
-			ok ->
+			true ->
 				{reply, {text, << "begin to recv frame form ", Cid/binary >>}, Req, State#state{cid=binary_to_integer(Cid)}};
 			{error, _Reason} ->
 				{reply, {text, << "error for recv frame ", Cid/binary >>}, Req, State}
@@ -66,9 +66,9 @@ websocket_info({timeout, _Ref, Msg}, Req, State) ->
 	{reply, {text, Msg}, Req, State};
 websocket_info({frame, Type, Time, Frame}, Req, State) ->
 	Data = extend104_util:bin_to_str(extend104_frame:serialise(Frame), 16),
-	% Resp = lists:concat([Type, ":", Data, "(", extbif:strftime(Time), ")"]),
 	Resp = [{time, to_binary(extbif:strftime(Time))}, {type, Type}, {data, to_binary(Data)}],
-	{reply, {text, jsonify(Resp)}, Req, handle_cache(Resp, State)};	
+	WriteResp = lists:concat([Type, ":", Data, "(", extbif:strftime(Time), ")"]),
+	{reply, {text, jsonify(Resp)}, Req, handle_cache(WriteResp, State)};	
 websocket_info(_Info, Req, State) ->
 	?INFO("get info:~p, ~p", [self(), Req]),
 	{ok, Req, State}.
