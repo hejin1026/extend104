@@ -1,0 +1,12 @@
+{application, pavilion,
+ [
+  {description, "pavilion outside"},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { pavilion_app, []}},
+  {env, []}
+ ]}.
