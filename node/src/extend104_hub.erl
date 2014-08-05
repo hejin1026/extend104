@@ -88,7 +88,7 @@ handle_cast({measure, Tid, DateTime, DataList}, #state{channel = Channel, ertdb=
     ?INFO("send datalog: ~p, ~p, ~p",[Tid,DateTime, DataList]),
 	lists:foreach(fun(Meas) ->
 		Key = build_key(Tid, Meas#measure.type, Meas#measure.no),
-		Cmd = ["insert", Key, DateTime, Meas#measure.value],
+		Cmd = ["insert", Key, DateTime, extbif:to_list(Meas#measure.value)],
 		ok = ertdb_client:q_noreply(Client, Cmd),
 		
 		%% for stat
@@ -104,8 +104,14 @@ handle_cast({measure, Tid, DateTime, DataList}, #state{channel = Channel, ertdb=
 							{insert, Value} ->
 								?INFO("insert value:~p, ~p", [Meas#measure.value, Config]),
 								ets:insert(last, Config#last{time=DateTime, value=Meas#measure.value}),
-								Datalog = [{ekey, Key},{station_id, Tid},{ptype, Ptype},{time, extbif:datetime(DateTime)},{value, Value}],
-								amqp:send(Channel, <<"measure.datalog">>, term_to_binary({datalog, Key, Datalog}));
+								%% 改统计方式，脚本统计
+								% Datalog = [{ekey, Key},{station_id, Tid},{ptype, Ptype},
+									% {time, extbif:datetime(DateTime)},{value, Value}],
+								% amqp:send(Channel, <<"measure.datalog">>, term_to_binary({datalog, Key, Datalog}));
+								StatKey = list_to_binary([Key, ":stat"]),
+								StatCmd = ["insert", StatKey, DateTime, extbif:to_list(Value)],
+								ertdb_client:q_noreply(Client, StatCmd);
+								
 							insert ->
 								?INFO("insert datalog:~p, ~p", [Meas#measure.value, Config]),
 								ets:insert(last, Config#last{time=DateTime, value=Meas#measure.value});	

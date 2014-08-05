@@ -57,9 +57,9 @@ sync(C) ->
 	?INFO_MSG("begin to sync"),
 	try 	
 		command(C, 'C_IC_NA_1', 30000),
-		erlang:send_after(?TIME15, self(), {sync, ?TIME15, 'C_IC_NA_1'}),
+		erlang:send_after(?TIME15, C, {sync, ?TIME15, 'C_IC_NA_1'}),
 		command(C, 'C_CI_NA_1', 30000),
-		erlang:send_after(?TIME25, self(), {sync, ?TIME25, 'C_CI_NA_1'}),
+		erlang:send_after(?TIME25, C, {sync, ?TIME25, 'C_CI_NA_1'}),
 		send(C, 'C_CS_NA_1')
 	catch Error:Reason -> 
 		?ERROR("sync timeout:~p,~p", [Reason, erlang:get_stacktrace()])
@@ -261,7 +261,7 @@ handle_info({timeout, _Timer, heartbeat}, State) ->
 
 handle_info({heartbeat_timeout, Cmd}, #state{socket=Sock} = State) ->
 	% reconnect
-	?INFO("heartbeat_timeout, cmd;~p, ~n ~p", [Cmd, State]),
+	?ERROR("heartbeat_timeout, cmd;~p, ~n ~p", [Cmd, State]),
 	gen_tcp:close(Sock),
 	% {ok, NState} =  connect(State),
     {noreply, State};	

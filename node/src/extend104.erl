@@ -87,11 +87,16 @@ handle_call({conn_status, Cid}, _From, #state{map_cid_pid=MapCP} = State) ->
 	{reply, Rest, State};
 	
 	
-handle_call({open_conn, ConnConf}, _From, #state{map_cid_pid=MapCP} = State) ->
+handle_call({open_conn, ConnConf}, _From, #state{map_cid_pid=MapCP, channel = Channel} = State) ->
 	Cid = get_cid(ConnConf),
 	case dict:find(Cid, MapCP) of
 		{ok, ConnPid} ->
-			extend104_connection:update(ConnPid, ConnConf),
+			case proplists:get_value(protocol, ConnConf) of
+				<<"extend104">> ->
+					extend104_connection:update(ConnPid, ConnConf);
+				_ ->
+					amqp:send(Channel, <<"monitor.reply">>, term_to_binary({status, Cid, calendar:local_time(), unsupport}))	
+			end,			
 			{reply, {ok, update_conn}, State};
 		error ->	
 			handle_connect(ConnConf, State)

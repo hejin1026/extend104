@@ -20,22 +20,23 @@ run() ->
 			end,
 	spawn(fun() -> 
 		% AllCid = term:all_channel(),
-		Sql = "select t2.id as tid, t2.address, t1.* from channels t1 ,term_station t2  
-	           where t1.channel_type =0 and t2.id=t1.station_id ",
-		AllCid = case emysql:sqlquery(Sql) of
+		Sql = "select t2.id as tid, t2.address, t4.cityid, t3.code as protocol, t1.* 
+				from channels t1 ,term_station t2, protocols t3, areas t4
+	           	where t1.channel_type =0 and t2.id=t1.station_id and t1.protocol_id = t3.id and t2.area_id = t4.id",
+		case emysql:sqlquery(Sql) of
 			        {ok, Records} ->
 						?ERROR("start run ~p: ~p ~n", [?MODULE, length(Records)]),
-			            lists:foreach(Dispatch, Records),
+						try
+							lists:foreach(Dispatch, Records)
+						catch
+							_:Err -> ?ERROR("dispatch error: ~p, ~p", [Err, erlang:get_stacktrace()])
+						end,
 			            ?ERROR("finish run ~p: ~p ~n", [?MODULE, length(Records)]);
 			        {error, Reason}  ->
 			            ?ERROR("start failure...~p",[Reason]),
 			            []
-				end,
-		try
-			lists:foreach(Dispatch, AllCid)
-		catch
-			_:Err -> ?ERROR("dispatch error: ~p, ~p", [Err, erlang:get_stacktrace()])
-		end
+		end				
+		
 	end).
 	
 	

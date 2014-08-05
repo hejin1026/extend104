@@ -34,7 +34,7 @@ lookup(Key) ->
 send_data(Tid, Type, No, Value) ->
 	DateTime = extbif:timestamp(),
 	Data = #measure{type=list_to_integer(Type), no = list_to_integer(No), value = list_to_integer(Value)},
-	extend104_hub:send_datalog({measure, 2, DateTime, [Data]}). 
+	extend104_hub:send_datalog({measure, list_to_integer(Tid), DateTime, [Data]}). 
 	
 	
 %% set %%

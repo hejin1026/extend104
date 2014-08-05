@@ -19,7 +19,7 @@
 
 -record(state, {cid, status, cache, count}).
 
--define(MAX_CACHE, 1024*1024*100).
+-define(MAX_CACHE, 1024*1024*10).
 
 -define(WEB_FILEPATH, "~/WebServer/sensorui/public/monitor/files").
 
