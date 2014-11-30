@@ -5,8 +5,7 @@
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib,
-				  cowboy
+                  stdlib
                  ]},
   {mod, { extend104_app, []}},
   {env, []}

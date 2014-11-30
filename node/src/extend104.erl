@@ -29,7 +29,7 @@ conn_status(Cid) ->
 	gen_server:call(?MODULE, {conn_status, Cid}).	
 	
 open_conn(ConnConf) ->
-	gen_server:call(?MODULE, {open_conn, ConnConf}, 10000).	
+	gen_server:call(?MODULE, {open_conn, ConnConf}, infinity).	
 	
 delete_conn(Cid) ->
 	gen_server:call(?MODULE, {delete_conn, Cid}).	
@@ -65,11 +65,27 @@ get_node_queue() ->
     [NodeName|_] = string:tokens(atom_to_list(node()), "@"),
     NodeName ++ ".node".	
 	
-handle_connect(ConnConf, #state{connection_sup = ConnSup, map_cid_pid=MapCP} = State) ->
+	
+handle_connect(emqtt_client, ConnConf, #state{map_cid_pid=MapCP, channel = Channel} = State) ->
+	Cid = get_cid(ConnConf),
+    case emqtt_client:start_link(ConnConf) of
+        {ok, ConnPid} ->
+			?ERROR("add mqtt cid:~p", [Cid]),
+			emqtt_client:subscribe(ConnPid, {lists:concat(["measure/",Cid]), 1}),
+			emqtt_client:consume(ConnPid, extend104_hub),
+			handle_status(Channel, Cid, connected),
+			{reply, {ok, ConnPid}, State#state{map_cid_pid=dict:store(Cid, ConnPid, MapCP)}};
+        {error, Error} ->
+            ?ERROR("get conn error: ~p, ~p", [Error, ConnConf]),
+			handle_status(Channel, Cid, disconnect),
+			{reply, {error, Error}, State}
+     end;	
+	
+handle_connect(extend104_connection, ConnConf, #state{connection_sup = ConnSup, map_cid_pid=MapCP} = State) ->
     case extend104_connection_sup:start_connection(ConnSup, ConnConf) of
         {ok, ConnPid} ->
 			Cid = get_cid(ConnConf),
-			?INFO("add cid:~p", [Cid]),
+			?ERROR("add extend104 cid:~p", [Cid]),
 			{reply, {ok, ConnPid}, State#state{map_cid_pid=dict:store(Cid, ConnPid, MapCP)}};
         {error, Error} ->
             ?ERROR("get conn error: ~p, ~p", [Error, ConnConf]),
@@ -89,17 +105,18 @@ handle_call({conn_status, Cid}, _From, #state{map_cid_pid=MapCP} = State) ->
 	
 handle_call({open_conn, ConnConf}, _From, #state{map_cid_pid=MapCP, channel = Channel} = State) ->
 	Cid = get_cid(ConnConf),
+	Mod = get_mod(ConnConf),
 	case dict:find(Cid, MapCP) of
 		{ok, ConnPid} ->
-			case proplists:get_value(protocol, ConnConf) of
-				<<"extend104">> ->
-					extend104_connection:update(ConnPid, ConnConf);
+			case Mod of
+				undefined ->
+					amqp:send(Channel, <<"monitor.reply">>, term_to_binary({status, Cid, calendar:local_time(), unsupport_mod}));	
 				_ ->
-					amqp:send(Channel, <<"monitor.reply">>, term_to_binary({status, Cid, calendar:local_time(), unsupport}))	
+					Mod:update(ConnPid, ConnConf)
 			end,			
 			{reply, {ok, update_conn}, State};
 		error ->	
-			handle_connect(ConnConf, State)
+			handle_connect(Mod, ConnConf, State)
 	end;
 			
 handle_call({delete_conn, Cid}, _From, #state{map_cid_pid = MapCP} = State) ->
@@ -141,7 +158,7 @@ handle_info({status, Cid, Connect} = Payload, #state{channel = Channel, map_cid_
 		start -> % call need time
 			handle_sync(Cid, MapCP);
 		_ ->
-			amqp:send(Channel, <<"monitor.reply">>, term_to_binary({status, Cid, calendar:local_time(), Connect}))
+			handle_status(Channel, Cid, Connect)
 	end,			
     {noreply, State};		
 	
@@ -163,6 +180,12 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 
+
+
+handle_status(Channel, Cid, Status) ->
+	?INFO("send status:~p, ~p", [Cid, Status]),
+	amqp:send(Channel, <<"monitor.reply">>, term_to_binary({status, Cid, calendar:local_time(), Status})).
+
 handle_sync(Cid, MapCP) ->
 	case dict:find(Cid, MapCP) of
 		{ok, Conn} ->
@@ -175,5 +198,14 @@ get_cid(ConnConf) ->
 	Cid = proplists:get_value(id, ConnConf),
 	Cid.
 		
-	
+get_mod(ConnConf) ->
+	case proplists:get_value(protocol, ConnConf) of
+		<<"extend104">> ->
+			extend104_connection;
+		<<"mqtt">>	->
+			emqtt_client;
+		Other ->
+			Other
+	end.		
+		
 	

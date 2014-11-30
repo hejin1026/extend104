@@ -115,6 +115,25 @@ handle_info({deliver, RoutingKey, Header, Payload}, #state{channel = Channel} = 
 					extend104_connection:unsubscribe(ConnPid, self()),
 					ets:delete(cid_wb, Cid)
 			end;						
+		{emqtt_command, Cid, Params} ->	%%TODO for emqtt command test
+			?ERROR("get emqtt_command,~p,~p", [Cid, Params]),
+			Rest = case extend104:get_conn_pid(Cid) of
+				{ok, ConnPid} ->
+					try 
+						Ip = proplists:get_value(ip, Params),
+						Port = proplists:get_value(port, Params),
+						Data = proplists:get_value(data, Params),
+						Topic = lists:concat(["command/",Ip, "/", Port]),
+						Message =  {measure, Data},
+						emqtt_client:publish(ConnPid, {Topic, 1, Message })
+					catch Error:Reason -> 
+						?ERROR("command error:~p,~p", [Reason, erlang:get_stacktrace()]),
+						{result, error} 
+					end;
+				error ->
+					{result, no_conn}
+			end,
+			?ERROR("command rest:~p", [Rest]);
         _ ->
             ok
     end,

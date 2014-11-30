@@ -12,6 +12,7 @@
 -export([start_link/0,
 		dispatch/1,
 		subscribe/2,
+		send_data/2,
 		unsubscribe/1, unsubscribe/2
 		]).
 
@@ -38,7 +39,11 @@ unsubscribe(Cid) ->
 	gen_server2:call(?MODULE, {unsubscribe, Cid}).
 	
 unsubscribe(Cid, WebSocket) ->
-	gen_server2:call(?MODULE, {unsubscribe, Cid, WebSocket}).		
+	gen_server2:call(?MODULE, {unsubscribe, Cid, WebSocket}).
+	
+%TODO emqtt test
+send_data(Cid, Params)	->
+	gen_server2:cast(?MODULE, {send_data, Cid, Params}).		
 	
 start_link() ->
     gen_server2:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -120,6 +125,15 @@ handle_cast({dispatch, {sync, Cid}}, #state{channel = Channel}=State) ->
 handle_cast({dispatch, {unmonitor, Cid}}, State) ->
 	handle_unmonitor({unmonitor, Cid}, State),
 	{noreply, State};
+	
+%TODO emqtt test
+handle_cast({send_data, Cid, Params}, #state{channel = Channel}=State) ->
+	with_monitor(Cid, fun(undefined) -> e({no_monitored, Cid});
+					(Node) -> 
+						?ERROR("send_data, ~p,~p",[Cid, Params]),
+						amqp:send(Channel, Node, term_to_binary({emqtt_command, Cid, Params}))
+					end),
+	{noreply, State};	
 		
 handle_cast(Msg, State) ->
 	?ERROR("unext case msg :~p", [Msg]),
@@ -201,7 +215,7 @@ handle_monitor({monitor, Cid, Data}=Payload, #state{channel=Channel}) ->
     CityId = proplists:get_value(cityid, Data),
     Payload2 = term_to_binary(Payload),
 	NodeId = master:get_queue(monitor, CityId),
-	?ERROR("get nodeid:~p", [NodeId]),
+	% ?ERROR("get nodeid:~p", [NodeId]),
 	with_monitor(Cid, fun(undefined) -> ?ERROR("has already monitor, no reply:~p", [Cid]);
 						(Node) -> ?ERROR("has already monitor, send again:~p, in ~p", [Cid, Node]),
 								amqp:send(Channel, Node, Payload2) end, 

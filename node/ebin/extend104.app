@@ -2,12 +2,11 @@
              [{description,[]},
               {vsn,"1"},
               {registered,[]},
-              {applications,[kernel,stdlib,cowboy]},
+              {applications,[kernel,stdlib]},
               {mod,{extend104_app,[]}},
               {env,[]},
               {modules,[extend104,extend104_app,extend104_connection,
                         extend104_connection_bak,extend104_connection_sup,
-                        extend104_ctl,extend104_frame,extend104_http,
-                        extend104_httpd,extend104_hub,extend104_monitor,
-                        extend104_sup,extend104_util,extend104_websocket,
-                        node_test,reloader]}]}.
+                        extend104_ctl,extend104_frame,extend104_hub,
+                        extend104_monitor,extend104_monitor2,extend104_sup,
+                        extend104_util,node_test]}]}.

@@ -12,32 +12,56 @@
 lookup_mnesia(Table) ->
 	mnesia:table_info(list_to_atom(Table), all).
 	
+lookup_cid(Cid) ->
+	mnesia:dirty_read(dispatch, {monitor, list_to_integer(Cid)}).	
+	
+process(Process) ->
+   process_info(whereis(list_to_atom(Process)), [memory, message_queue_len,heap_size,total_heap_size]).	
+	
 
 run() ->
 	Dispatch = fun(Record) ->
 				Cid = proplists:get_value(id, Record),
 				master_dist:dispatch({monitor, Cid, Record})
 			end,
-	spawn(fun() -> 
-		% AllCid = term:all_channel(),
-		Sql = "select t2.id as tid, t2.address, t4.cityid, t3.code as protocol, t1.* 
-				from channels t1 ,term_station t2, protocols t3, areas t4
-	           	where t1.channel_type =0 and t2.id=t1.station_id and t1.protocol_id = t3.id and t2.area_id = t4.id",
-		case emysql:sqlquery(Sql) of
-			        {ok, Records} ->
-						?ERROR("start run ~p: ~p ~n", [?MODULE, length(Records)]),
-						try
-							lists:foreach(Dispatch, Records)
-						catch
-							_:Err -> ?ERROR("dispatch error: ~p, ~p", [Err, erlang:get_stacktrace()])
-						end,
-			            ?ERROR("finish run ~p: ~p ~n", [?MODULE, length(Records)]);
-			        {error, Reason}  ->
-			            ?ERROR("start failure...~p",[Reason]),
-			            []
-		end				
 		
-	end).
+	CountSql = "select count(*) as count
+			from channels t1, term_station t2, protocols t3, areas t4
+           	where t1.channel_type =0 and t2.id=t1.station_id and t1.protocol_id = t3.id and t2.area_id = t4.id",	
+			
+	{ok, [Data]} = emysql:sqlquery(CountSql),		
+	?ERROR("data: ~p", [Data]),	
+	Count = proplists:get_value(count, Data),
+	PoolSize = erlang:system_info(schedulers),
+	?ERROR("PoolSize: ~p,~p", [Count, PoolSize]),
+	
+	Num = (Count div PoolSize) + 1,
+			
+	lists:foreach(fun(N) ->
+		Start = (N -1) *  Num,
+		?ERROR("start from :~p, num:~p ~n", [Start, Num]),
+		spawn(fun() ->
+			% AllCid = term:all_channel(),
+			Sql = "select t2.id as tid, t2.address, t4.cityid, t3.code as protocol, t1.* 
+					from channels t1, term_station t2, protocols t3, areas t4
+					where t1.channel_type =0 and t2.id=t1.station_id and t1.protocol_id = t3.id and t2.area_id = t4.id
+					order by t1.id " ++ lists:concat(["limit ", Num, " offset ", Start]),
+			case emysql:sqlquery(Sql) of
+		        {ok, Records} ->
+					?ERROR("start run ~p: ~p ~n", [Sql, length(Records)]),
+					try
+						lists:foreach(Dispatch, Records)
+					catch
+						_:Err -> ?ERROR("dispatch error: ~p, ~p", [Err, erlang:get_stacktrace()])
+					end,
+		            ?ERROR("finish run ~p: ~p ~n", [?MODULE, length(Records)]);
+		        {error, Reason}  ->
+		            ?ERROR("start failure...~p",[Reason]),
+		            []
+			end
+		end)		
+	end, lists:seq(1, PoolSize) ).
+		
 	
 	
 node_config() ->
@@ -77,7 +101,8 @@ ertdb_config() ->
 					case emysql:sqlquery(Sql) of
 				        {ok, Records} ->
 							?ERROR("start ertdb config ~p: ~p ~n", [?MODULE, length(Records)]),
-							split_and_sleep(Records, 60, fun ertdb_config/1),
+							% split_and_sleep(Records, 100, fun ertdb_config/1),
+							lists:foreach(fun ertdb_config/1, Records),
 				            ?ERROR("finish ertdb config ~p: ~p~n", [?MODULE, length(Records)]);
 				        {error, Reason}  ->
 				            ?ERROR("ertdb config failure...~p",[Reason]),
@@ -126,6 +151,9 @@ command(Cid, Key, Action, Order) ->
 	Payload = [{cid, Cid}, {type, 46}, {params, [{key, Key}, {action, Action}, {order, Order}]}],
 	master_dist ! {deliver, <<"command.inter">>, undefined, mochijson2:encode(Payload)} .	
 	
+send_data(Cid, Ip, Port, Key, Value) ->
+	Params = [{data, [{Key, Value}]}, {ip, Ip}, {port, Port}],
+	master_dist:send_data(list_to_integer(Cid), Params).
 		
 
 status() ->

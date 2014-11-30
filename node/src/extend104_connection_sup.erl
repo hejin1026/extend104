@@ -7,7 +7,7 @@
 
 -author("hejin1026@gmail.com/13-10-30").
 
--behaviour(supervisor).
+-behaviour(supervisor2).
 
 -export([start_link/0, start_connection/2]).
 -export([init/1]).

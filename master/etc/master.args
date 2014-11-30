@@ -14,12 +14,12 @@
 ## Heartbeat management; auto-restarts VM if it dies or becomes unresponsive
 ## (Disabled by default..use with caution!)
 ##-heart
--smp auto
+-smp disable
 
 ## Enable kernel poll and a few async threads
 +K true
 
-+A 2
++A 32
 
 ## Treat error_logger warnings as warnings
 +W w

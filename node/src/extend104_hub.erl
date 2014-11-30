@@ -9,7 +9,7 @@
 -include_lib("elog/include/elog.hrl").
 
 -export([start_link/1,
-		config/2,lookup/1,
+		config/2,lookup/1, lookup_ertdb/0,
         send_datalog/1,
 		stop/0]).
 
@@ -43,7 +43,9 @@ send_datalog(DataList) ->
 	
 lookup(Key) ->
 	ets:lookup(last, Key).	
-
+	
+lookup_ertdb() ->
+	gen_server:call(?MODULE, lookup_ertdb).	
 
 stop() ->
     gen_server:call(?MODULE, stop).
@@ -62,6 +64,9 @@ open(Conn) ->
 
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
+	
+handle_call(lookup_ertdb, _From, #state{ertdb=Client}=State) ->
+	{reply, Client, State};		
 	
 handle_call({config, Key, Data}, From, State) ->
 	?INFO("insert config:~p, ~p", [Key,Data]),
@@ -135,6 +140,55 @@ handle_cast({measure, Tid, DateTime, DataList}, #state{channel = Channel, ertdb=
 handle_cast(Msg, State) ->
     ?ERROR("Unexpected message: ~p", [Msg]),
     {noreply, State}.
+
+
+%% for emqtt test
+handle_info({measure, Cid, DateTime, DataList}, #state{channel = Channel, ertdb=Client} = State) ->
+	?INFO("get measure data:~p,~p", [Cid, DataList]),
+	lists:foreach(fun({Key, Value}) ->
+		% Key = build_key(Cid, 11, No),
+		Cmd = ["insert", Key, DateTime, extbif:to_list(Value)],
+		ok = ertdb_client:q_noreply(Client, Cmd),
+		
+		%% for stat
+	    case ets:lookup(last, Key) of
+		    [#last{type=Type, ptype=Ptype, coef=Coef, time=LastTime, value=LastValue} = Config] -> 
+				if(LastTime == undefined) ->
+					?INFO("insert first:~p,~p", [Value, Config]),
+					ets:insert(last, Config#last{time=DateTime, value=Value});	
+				true ->
+					Interval = DateTime - LastTime,
+					if Interval > 0 ->
+						try format_value(Type, Coef, Interval, LastValue, Value) of
+							{insert, Value} ->
+								?INFO("insert value:~p, ~p", [Value, Config]),
+								ets:insert(last, Config#last{time=DateTime, value=Value}),
+								%% 改统计方式，脚本统计
+								% Datalog = [{ekey, Key},{station_id, Tid},{ptype, Ptype},
+									% {time, extbif:datetime(DateTime)},{value, Value}],
+								% amqp:send(Channel, <<"measure.datalog">>, term_to_binary({datalog, Key, Datalog}));
+								StatKey = list_to_binary([Key, ":stat"]),
+								StatCmd = ["insert", StatKey, DateTime, extbif:to_list(Value)],
+								ertdb_client:q_noreply(Client, StatCmd);
+								
+							insert ->
+								ets:insert(last, Config#last{time=DateTime, value=Value});	
+							ignore ->
+								?WARNING("ignore value:~p, ~p", [Value, Config])
+			            catch
+			                _:Err ->
+			                    ?ERROR("err: ~p, type: ~p, key: ~p, ~p", [Err, Type, Key, erlang:get_stacktrace()]),
+			                    []
+			            end;			
+					true ->
+						?WARNING("~p: interval < 0", [Key])
+					end
+				end;					
+		    [] -> ok
+	    end
+		
+	end, DataList),
+    {noreply, State};
 
 handle_info(Info, State) ->
     ?WARNING("unext info :~p", [Info]),

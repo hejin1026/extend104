@@ -17,6 +17,7 @@ start() ->
 	[start_app(App) || App <- [crypto, lager, amqp_client, extend104] ].
 
 start_app(App) ->
+	io:format("start app:~p ~n", [App]),
     ok = application:start(App).
 	
 stop() ->
