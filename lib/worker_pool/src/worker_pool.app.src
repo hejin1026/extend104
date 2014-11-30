@@ -1,0 +1,15 @@
+{application, worker_pool,
+ [{description, "RabbitMQ Worker Pool Library"},
+  {vsn, "2.8.1"},
+  {modules, [
+		worker_pool,
+		worker_pool_app,
+		worker_pool_sup,
+		worker_pool_worker,
+		file_handle_cache
+  ]},
+  {registered, []},
+  {applications, [kernel]},
+  {mod, {worker_pool_app, []}},
+  {env, []}
+ ]}.
