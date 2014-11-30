@@ -1,0 +1,11 @@
+{application, emqtt_client,
+ [
+  {description, "emqtt client"},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {env, []}
+ ]}.
