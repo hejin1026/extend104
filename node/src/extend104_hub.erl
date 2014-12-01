@@ -9,7 +9,7 @@
 -include_lib("elog/include/elog.hrl").
 
 -export([start_link/2, name/1,get_pid/0,
-		config/2,lookup/1, lookup_ertdb/0,
+		config/2,lookup/1, lookup_ertdb/1,
         send_datalog/1,
 		stop/0]).
 
@@ -52,8 +52,8 @@ send_datalog(DataList) ->
 lookup(Key) ->
 	ets:lookup(last, Key).	
 	
-lookup_ertdb() ->
-	gen_server:call(?MODULE, lookup_ertdb).	
+lookup_ertdb(Id) ->
+	gen_server:call(name(Id), lookup_ertdb).	
 
 stop() ->
     gen_server:call(?MODULE, stop).

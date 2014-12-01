@@ -25,7 +25,7 @@ start_link() ->
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
 init([]) ->
-    erlang:system_monitor(self(), [{long_gc, 5000}, {large_heap, 1000000}, busy_port]),
+    erlang:system_monitor(self(), [{long_gc, 5000}, {large_heap, 10000}, busy_port]),
     ?INFO("monitor is started...[ok]", []),
     {ok, #state{}}.
 %%--------------------------------------------------------------------

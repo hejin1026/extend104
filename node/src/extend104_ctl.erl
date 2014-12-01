@@ -36,8 +36,8 @@ conn_status(Cid) ->
 lookup(Key) ->
 	extend104_hub:lookup(list_to_binary(Key)).	
 	
-lookup_ertdb() ->
-	process_info(extend104_hub:lookup_ertdb(), [memory, message_queue_len,heap_size,total_heap_size]).	
+lookup_ertdb(Id) ->
+	process_info(extend104_hub:lookup_ertdb(Id), [memory, message_queue_len,heap_size,total_heap_size]).	
 	
 client_info(Cid) ->
 	case extend104:get_conn_pid(list_to_integer(Cid)) of

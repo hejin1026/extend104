@@ -55,7 +55,9 @@ handle_call({go, Config}, _From, State=#state{channel=CS}) ->
 	{reply, ok, State#state{channel= dict:store({Ip, Port}, C, CS)} };
 	
 handle_call({send_data, Channel}, _From, State=#state{interval=Interval}) ->
-	erlang:send_after((Interval + random:uniform(Interval)) * 1000, self(), {send_data, Channel}),
+	NewInterval = Interval + random:uniform(Interval),	
+	?ERROR("send data after:~p, ~p", [NewInterval, Channel]),
+	erlang:send_after(NewInterval * 1000, self(), {send_data, Channel}),
 	{reply, ok, State};	
 	
 handle_call(Req, _From, State) ->
