@@ -1,0 +1,74 @@
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=uft-8">
+    <title>inter client</title>
+    <script src="/static/jquery.min.js"></script>
+	<script>
+	function myrefresh(){
+		$.ajax({
+			url: 'test_value.json',
+			type: 'GET',
+			data:{
+				cid: $( "input[name='cid']" ).attr("value")	
+			},
+   		  	dataType:"json",
+			success: function( data ) {
+				$("table tbody").empty();	
+				var tbody = "";
+				$.each(data, function(n, value){
+					var trs = "";  
+	             	trs += "<tr><td>" +value.key+"</td>";  
+					trs += "<td>" +value.value+"</td>"; 
+					trs += "<td>" +value.time+"</td></tr>"; 
+	              	tbody += trs;  
+	            });  
+				
+				$("table tbody").append(tbody);
+			},
+			error:  function (XMLHttpRequest, textStatus, errorThrown) { 
+			    // alert(errorThrown); 
+			}	
+		});
+	}	
+	$(document).ready(function () { 
+		// myrefresh();
+		setInterval("myrefresh()", 10000); 
+	}); 
+	</script>
+  </head>
+
+  <body>
+	<form method="get" role="form" class="form-horizontal" action="test_value">
+	
+		 <div class="form-group">
+		 	<label class="col-sm-2 col-md-2 control-label" for="cid">通道号</label>
+		 	<div class="col-sm-10 col-md-8">
+		 		<input type="text" class="form-control" name="cid">
+		 	</div>
+		 </div>
+
+	     <!-- ><div class="form-group">
+	         <div class="col-sm-offset-2 col-sm-10">
+			 <button type="submit" class="btn btn-primary">确定</button>
+	         </div>
+	     </div> -->
+
+	</form>
+
+
+	<div id="measure_table">
+		<table class="table table-striped">
+		    <thead>
+		        <tr>
+		            <td>测点key</td>
+					<td>测点值</td>
+					<td>产生时间</td>
+		        </tr>
+		    </thead>
+		    <tbody>
+				
+		    </tbody>
+		</table>
+	</div>
+  </body>
+</html> 

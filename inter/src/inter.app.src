@@ -1,0 +1,12 @@
+{application, inter,
+ [
+  {description, "emqtt test"},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { inter_app, []}},
+  {env, []}
+ ]}.

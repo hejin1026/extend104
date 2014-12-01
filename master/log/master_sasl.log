@@ -2262,3 +2262,62 @@
                        {restart_type,transient},
                        {shutdown,4294967295},
                        {child_type,worker}]
+
+=CRASH REPORT==== 30-Nov-2014::19:53:41 ===
+  crasher:
+    initial call: emysql_conn:init/1
+    pid: <0.1058.0>
+    registered_name: []
+    exception exit: socket_closed
+      in function  gen_server:terminate/6 (gen_server.erl, line 744)
+    ancestors: [emysql_sup,<0.103.0>]
+    messages: []
+    links: [<0.104.0>]
+    dictionary: [{queries,0}]
+    trap_exit: false
+    status: running
+    heap_size: 1598
+    stack_size: 27
+    reductions: 547
+  neighbours:
+
+=SUPERVISOR REPORT==== 30-Nov-2014::19:53:41 ===
+     Supervisor: {local,emysql_sup}
+     Context:    child_terminated
+     Reason:     socket_closed
+     Offender:   [{pid,<0.1058.0>},
+                  {name,1},
+                  {mfargs,
+                      {emysql_conn,start_link,
+                          [1,
+                           [{included_applications,[]},
+                            {port,3306},
+                            {host,"localhost"},
+                            {username,"root"},
+                            {password,"public"},
+                            {pool_size,1},
+                            {database,"sensorui"},
+                            {encoding,utf8}]]}},
+                  {restart_type,transient},
+                  {shutdown,4294967295},
+                  {child_type,worker}]
+
+
+=PROGRESS REPORT==== 30-Nov-2014::19:53:41 ===
+          supervisor: {local,emysql_sup}
+             started: [{pid,<0.1220.0>},
+                       {name,1},
+                       {mfargs,
+                           {emysql_conn,start_link,
+                               [1,
+                                [{included_applications,[]},
+                                 {port,3306},
+                                 {host,"localhost"},
+                                 {username,"root"},
+                                 {password,"public"},
+                                 {pool_size,1},
+                                 {database,"sensorui"},
+                                 {encoding,utf8}]]}},
+                       {restart_type,transient},
+                       {shutdown,4294967295},
+                       {child_type,worker}]

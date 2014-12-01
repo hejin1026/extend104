@@ -72,7 +72,7 @@ handle_connect(emqtt_client, ConnConf, #state{map_cid_pid=MapCP, channel = Chann
         {ok, ConnPid} ->
 			?ERROR("add mqtt cid:~p", [Cid]),
 			emqtt_client:subscribe(ConnPid, {lists:concat(["measure/",Cid]), 1}),
-			emqtt_client:consume(ConnPid, extend104_hub),
+			emqtt_client:consume(ConnPid, extend104_hub:get_pid()),
 			handle_status(Channel, Cid, connected),
 			{reply, {ok, ConnPid}, State#state{map_cid_pid=dict:store(Cid, ConnPid, MapCP)}};
         {error, Error} ->
@@ -135,15 +135,6 @@ handle_call({get_conn_pid, Cid}, _From, #state{map_cid_pid = MapCP} = State) ->
 handle_call(Req, _From, State) ->
     ?WARNING("unexpect request: ~p", [Req]),
     {reply, {error, {invalid_request, Req}}, State}.
-	
-handle_cast({config, Cid, Key, Data}, #state{map_cid_pid = MapCP} = State) ->
-	case dict:find(Cid, MapCP) of
-		{ok, Conn} ->
-			extend104_connection:config(Conn, Key, Data);
-		error ->
-			?ERROR("can not config,no conn:~p", [Cid])
-	end,	
-	{noreply, State};
 	
 handle_cast({sync, Cid}, #state{map_cid_pid = MapCP} = State) ->
 	% handle_sync(Cid, MapCP),

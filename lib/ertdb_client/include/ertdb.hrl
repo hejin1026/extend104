@@ -28,7 +28,7 @@
 
 -define(NL, "\r\n").
 
--define(SOCKET_OPTS, [binary, {active, once}, {packet, raw}, {reuseaddr, true}]).
+-define(SOCKET_OPTS, [binary, {active, once}, {packet, raw}, {reuseaddr, true}, {nodelay, false}, {delay_send, true}]).
 
 
 -record(rtk_config, {key, compress, dev, maxtime=300, mintime=0, his_dev, his_maxtime=600, his_mintime=0}).		

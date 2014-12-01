@@ -8,7 +8,7 @@
 -include("extend104.hrl").
 -include_lib("elog/include/elog.hrl").
 
--export([start_link/1,
+-export([start_link/2, name/1,get_pid/0,
 		config/2,lookup/1, lookup_ertdb/0,
         send_datalog/1,
 		stop/0]).
@@ -22,7 +22,7 @@
         terminate/2,
         code_change/3]).
 
--record(state, {channel, ertdb}).
+-record(state, {id, channel, ertdb}).
 
 -record(last, {key, type, ptype, coef, time, value}).
 
@@ -32,14 +32,22 @@
 %% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
 %% Description: Starts the server
 %%--------------------------------------------------------------------
-start_link(Config) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [Config], []).
+start_link(Id, Config) ->
+    gen_server:start_link({local, name(Id)}, ?MODULE, [Id, Config], []).
+
+name(Id) ->
+	list_to_atom( lists:concat([?MODULE, "_", Id]) ).	
+	
+get_pid() ->
+	pg2:get_closest_pid(?MODULE).	
 	
 config(Key, Data) ->
-	gen_server:call(?MODULE, {config, Key, Data}).	
+	Pid = pg2:get_closest_pid(?MODULE),
+	gen_server:call(Pid, {config, Key, Data}).	
 
 send_datalog(DataList) ->
-    gen_server:cast(?MODULE, DataList).
+	Pid = pg2:get_closest_pid(?MODULE),
+    gen_server:cast(Pid, DataList).
 	
 lookup(Key) ->
 	ets:lookup(last, Key).	
@@ -50,13 +58,20 @@ lookup_ertdb() ->
 stop() ->
     gen_server:call(?MODULE, stop).
 
-init([Config]) ->
+init([Id, Config]) ->
     ?INFO("Monet hub is starting...[done]", []),
-	ets:new(last, [set, protected, named_table, {keypos, #last.key}]),
+	case ets:info(last, named_table) of
+		undefined ->
+			ets:new(last, [public, set, protected, named_table, {keypos, #last.key}]);
+		_ ->
+			ok
+	end,			
     {ok, Conn} = amqp:connect(),
     Channel = open(Conn),
+	pg2:create(?MODULE),
+	pg2:join(?MODULE, self()),
 	{ok, Client} = ertdb_client:start_link(Config),
-    {ok, #state{channel = Channel, ertdb=Client}}.
+    {ok, #state{id=Id, channel = Channel, ertdb=Client}}.
 
 open(Conn) ->
     {ok, Channel} = amqp:open_channel(Conn),

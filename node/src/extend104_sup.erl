@@ -36,9 +36,14 @@ start_link(CityId) ->
 	supervisor:start_child(Sup, Monitor2),
 	
 	{ok, Config} = application:get_env(ertdb), 
-    Hub = {extend104_hub, {extend104_hub, start_link, [Config]},
-			permanent, 10, worker, [extend104_hub]},
-	supervisor:start_child(Sup, Hub),
+	PoolSize = erlang:system_info(schedulers),
+	?ERROR("get poolsize:~p", [PoolSize]),
+	lists:foreach(fun(Id) ->
+	    Hub = {extend104_hub:name(Id), {extend104_hub, start_link, [Id, Config]},
+				permanent, 10, worker, [extend104_hub]},
+		supervisor:start_child(Sup, Hub)
+	end, lists:seq(1, PoolSize)),
+    
 	{ok, Sup}.
 
 %% ===================================================================

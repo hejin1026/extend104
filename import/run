@@ -1,0 +1,19 @@
+#!/usr/bin/env escript
+ERL_LIBS=../lib
+export ERL_LIBS
+
+%% -*- erlang -*-
+%%! -sname import -smp enable +P 400000 -pa ./ebin  -config etc/import.config -boot start_sasl
+
+main([JourDir, OutDir]) ->
+	io:format("hejin....~p,~p",[JourDir, OutDir]),
+    import_stat_measure:start(JourDir, OutDir);
+
+main(_) ->
+    usage().
+
+usage() ->
+    io:format("usage: run RedisHost DestDir \n"),
+    halt(1).
+
+
