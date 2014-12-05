@@ -5,7 +5,8 @@
 
 -behavior(gen_server).
 
--export([start_link/0, go/1, send_data/1, save_data/2, lookup_data/1, lookup_value/1]).
+-export([start_link/0, go/1, send_data/1, save_data/2,
+	 	lookup_inter/1, lookup_data/1, lookup_value/1]).
 
 -export([init/1, 
 		handle_call/3, 
@@ -28,7 +29,10 @@ send_data(Channel) ->
 	
 save_data(Cid, Data) ->
 	gen_server:cast(?MODULE, {save_data, Cid, Data}).	
-	
+
+lookup_inter(Cid) ->
+	ets:lookup(inter_interval, Cid).	
+		
 lookup_data(Cid) ->
 	ets:lookup(inter_channel, Cid).
 	
@@ -37,6 +41,7 @@ lookup_value(Key) ->
 			
 init([]) ->
 	process_flag(trap_exit, true),
+	ets:new(inter_interval, [set, named_table]),
 	ets:new(inter_channel, [set, named_table]),
 	ets:new(inter_recv, [set, named_table]),
 	{ok, Num} = application:get_env(key_num),
@@ -55,8 +60,11 @@ handle_call({go, Config}, _From, State=#state{channel=CS}) ->
 	{reply, ok, State#state{channel= dict:store({Ip, Port}, C, CS)} };
 	
 handle_call({send_data, Channel}, _From, State=#state{interval=Interval}) ->
+	random:seed(erlang:now()),
 	NewInterval = Interval + random:uniform(Interval),	
-	?ERROR("send data after:~p, ~p", [NewInterval, Channel]),
+	?INFO("send data after:~p, ~p", [NewInterval, Channel]),
+	Cid	 = proplists:get_value(id, Channel),
+	ets:insert(inter_interval, {Cid, NewInterval}),
 	erlang:send_after(NewInterval * 1000, self(), {send_data, Channel}),
 	{reply, ok, State};	
 	

@@ -25,7 +25,7 @@ start_link() ->
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
 init([]) ->
-    erlang:system_monitor(self(), [{long_gc, 5000}, {large_heap, 10000}, busy_port]),
+    erlang:system_monitor(self(), [{long_gc, 5000}, {large_heap, 4 * 1024 * 1024}, busy_port]),
     ?INFO("monitor is started...[ok]", []),
     {ok, #state{}}.
 %%--------------------------------------------------------------------
@@ -61,10 +61,13 @@ handle_info({monitor, GcPid, long_gc, Info}, State) ->
     {noreply, State};
 
 handle_info({monitor, GcPid, large_heap, Info}, State) ->
-	[{messages,Mess}] = process_info(GcPid, [messages]),
+	Message = case process_info(GcPid, [messages]) of
+		[{messages,[Mess|_]}] -> Mess;
+		[{messages, []}] -> []
+	end,	
     ?ERROR("large_heap: gcpid = ~p,~p ~n ~p, ~p", [GcPid, process_info(GcPid, 
 		[registered_name, memory, message_queue_len,heap_size,total_heap_size]), 
-			lists:nth(1, Mess),Info]),
+			Message,Info]),
     {noreply, State};
 
 handle_info({monitor, SusPid, busy_port, Port}, State) ->

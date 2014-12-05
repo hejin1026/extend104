@@ -2,11 +2,7 @@
 
 -create("hejin 2013-10-18").
 
--export([reverse_int_value/1,reverse_int_value/2, reverse_byte_value/1, reverse_byte_value2/1, reverse_byte/1, 
-		add_cn/1, bin_to_str/2, to_string/1, decode_key/1]).
-
--export([b2a/1]).
-
+-compile(export_all).
 
 %int -> overturn byte
 reverse_int_value(Int) ->
@@ -75,6 +71,17 @@ to_string(T)  ->
 	
 decode_key(Key) ->
 	string:tokens(Key, ":").
+	
+pinfo(Pid) ->
+    Props = [registered_name, message_queue_len, memory,
+        total_heap_size, heap_size, reductions],
+	case process_info(Pid, Props) of
+	undefined ->
+		{{undefined, node()}, [undefined]};
+	Info ->
+		Name = proplists:get_value(registered_name, Info),
+		{{Name, node()}, Info}
+	end.	
 	
 	
 	

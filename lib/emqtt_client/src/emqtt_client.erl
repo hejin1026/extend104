@@ -42,7 +42,7 @@
 
 -define(TCPOPTIONS, [binary, {packet, raw}, {active, true}]).
 
--define(TIMEOUT, 8000).
+% -define(TIMEOUT, 8000).
 
 -define(CLIENT_ID_MAXLEN, 23).
 
@@ -101,14 +101,13 @@ init([Args]) ->
 	case do_connect(extbif:to_list(Cid), extbif:to_list(Addr), Port) of
 		{ok, State} ->
 			process_flag(trap_exit, true),
-			
-			{ok, State, hibernate, {backoff, 1000, 1000, 10000}};
+			{ok, State};
 		{error, Reason} ->
-			{stop, Reason}
+			{stop, {connection_error, Reason}}
 	end.
 
 do_connect(Cid, Addr, Port) ->
-    case gen_tcp:connect(Addr, Port, ?TCPOPTIONS, ?TIMEOUT) of
+    case gen_tcp:connect(Addr, Port, ?TCPOPTIONS) of
         {ok, Sock}     -> 
 			Fixed =  #mqtt_frame_fixed{type 	 = ?CONNECT},
 			KeepAlive = 300,

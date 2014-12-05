@@ -24,43 +24,28 @@ run() ->
 				Cid = proplists:get_value(id, Record),
 				master_dist:dispatch({monitor, Cid, Record})
 			end,
-		
-	CountSql = "select count(*) as count
-			from channels t1, term_station t2, protocols t3, areas t4
-           	where t1.channel_type =0 and t2.id=t1.station_id and t1.protocol_id = t3.id and t2.area_id = t4.id",	
-			
-	{ok, [Data]} = emysql:sqlquery(CountSql),		
-	?ERROR("data: ~p", [Data]),	
-	Count = proplists:get_value(count, Data),
-	PoolSize = erlang:system_info(schedulers),
-	?ERROR("PoolSize: ~p,~p", [Count, PoolSize]),
 	
-	Num = (Count div PoolSize) + 1,
-			
-	lists:foreach(fun(N) ->
-		Start = (N -1) *  Num,
-		?ERROR("start from :~p, num:~p ~n", [Start, Num]),
-		spawn(fun() ->
-			% AllCid = term:all_channel(),
-			Sql = "select t2.id as tid, t2.address, t4.cityid, t3.code as protocol, t1.* 
-					from channels t1, term_station t2, protocols t3, areas t4
-					where t1.channel_type =0 and t2.id=t1.station_id and t1.protocol_id = t3.id and t2.area_id = t4.id
-					order by t1.id " ++ lists:concat(["limit ", Num, " offset ", Start]),
-			case emysql:sqlquery(Sql) of
-		        {ok, Records} ->
-					?ERROR("start run ~p: ~p ~n", [Sql, length(Records)]),
-					try
-						lists:foreach(Dispatch, Records)
-					catch
-						_:Err -> ?ERROR("dispatch error: ~p, ~p", [Err, erlang:get_stacktrace()])
-					end,
-		            ?ERROR("finish run ~p: ~p ~n", [?MODULE, length(Records)]);
-		        {error, Reason}  ->
-		            ?ERROR("start failure...~p",[Reason]),
-		            []
-			end
-		end)		
-	end, lists:seq(1, PoolSize) ).
+	spawn(fun() ->
+		% AllCid = term:all_channel(),
+		Sql = "select t2.id as tid, t2.address, t4.cityid, t3.code as protocol, t1.* 
+				from channels t1, term_station t2, protocols t3, areas t4
+				where t1.channel_type =0 and t2.id=t1.station_id and t1.protocol_id = t3.id and t2.area_id = t4.id", 
+		case emysql:sqlquery(Sql) of
+	        {ok, Records} ->
+				?ERROR("start run ~p: ~p ~n", [Sql, length(Records)]),
+				try
+					split_and_sleep(Records, 200, Dispatch),
+					% lists:foreach(Dispatch, Records),
+					?ERROR("finish run ~p: ~p ~n", [?MODULE, length(Records)])
+				catch
+					_:Err -> ?ERROR("dispatch error: ~p, ~p", [Err, erlang:get_stacktrace()])
+				end;
+	        {error, Reason}  ->
+	            ?ERROR("start failure...~p",[Reason]),
+	            []
+		end
+	end).		
+	
 		
 	
 	
@@ -126,9 +111,10 @@ split_and_sleep([], _N, _F) ->
 split_and_sleep(L, N, F) when(length(L) < N)->
 	lists:foreach(F, L);
 split_and_sleep(L, N, F) ->
+	?ERROR("the rest :~p", [length(L)]),
 	{L1, L2} = lists:split(N, L),
 	lists:foreach(F, L1),
-	timer:sleep(100),
+	timer:sleep(1000),
 	split_and_sleep(L2, N, F).
 	
 sync() ->
@@ -230,7 +216,48 @@ strnum(Other) ->
 		
 	
 	
+run2() ->
+	Dispatch = fun(Record) ->
+				Cid = proplists:get_value(id, Record),
+				master_dist:dispatch({monitor, Cid, Record})
+			end,
+		
+	CountSql = "select count(*) as count
+			from channels t1, term_station t2, protocols t3, areas t4
+           	where t1.channel_type =0 and t2.id=t1.station_id and t1.protocol_id = t3.id and t2.area_id = t4.id",	
+			
+	{ok, [Data]} = emysql:sqlquery(CountSql),		
+	?ERROR("data: ~p", [Data]),	
+	Count = proplists:get_value(count, Data),
+	PoolSize = erlang:system_info(schedulers),
+	?ERROR("PoolSize: ~p,~p", [Count, PoolSize]),
 	
+	Num = (Count div PoolSize) + 1,
+			
+	lists:foreach(fun(N) ->
+		Start = (N -1) *  Num,
+		?ERROR("start from :~p, num:~p ~n", [Start, Num]),
+		spawn(fun() ->
+			% AllCid = term:all_channel(),
+			Sql = "select t2.id as tid, t2.address, t4.cityid, t3.code as protocol, t1.* 
+					from channels t1, term_station t2, protocols t3, areas t4
+					where t1.channel_type =0 and t2.id=t1.station_id and t1.protocol_id = t3.id and t2.area_id = t4.id
+					order by t1.id " ++ lists:concat(["limit ", Num, " offset ", Start]),
+			case emysql:sqlquery(Sql) of
+		        {ok, Records} ->
+					?ERROR("start run ~p: ~p ~n", [Sql, length(Records)]),
+					try
+						lists:foreach(Dispatch, Records)
+					catch
+						_:Err -> ?ERROR("dispatch error: ~p, ~p", [Err, erlang:get_stacktrace()])
+					end,
+		            ?ERROR("finish run ~p: ~p ~n", [?MODULE, length(Records)]);
+		        {error, Reason}  ->
+		            ?ERROR("start failure...~p",[Reason]),
+		            []
+			end
+		end)		
+	end, lists:seq(1, PoolSize) ).	
 	
 	
 	

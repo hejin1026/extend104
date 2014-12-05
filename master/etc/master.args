@@ -19,7 +19,7 @@
 ## Enable kernel poll and a few async threads
 +K true
 
-+A 32
++A 4
 
 ## Treat error_logger warnings as warnings
 +W w

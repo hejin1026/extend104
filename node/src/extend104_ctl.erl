@@ -19,17 +19,19 @@ status() ->
 		"node is running~n"
     end.
 	
-process(Process) ->
-    process_info(whereis(list_to_atom(Process)),
-        [memory, message_queue_len,heap_size,total_heap_size]).	
-		%
-% process2(P, I, D) ->
-%     process_info(pid(list_to_integer(P),list_to_integer(I),list_to_integer(D)),
-%         [memory, message_queue_len,heap_size,total_heap_size]).
+		
+process() ->
+    Infos = [ pinfo(P) ||P <- [ extend104, extend104_monitor ] ] ,
+	Infos2 = lists:flatten(extend104_hub:info()),
+    [{Name, Info} || {Name, Info} <- Infos ++ Infos2].	
+	
+pinfo(Process) ->
+	extend104_util:pinfo(whereis(extbif:to_atom(Process))).
 	
 state(Type) ->
     sys:get_status(list_to_atom(Type)).
 
+% 104
 conn_status(Cid) ->
 	extend104:conn_status(list_to_integer(Cid)).
 	
@@ -39,13 +41,21 @@ lookup(Key) ->
 lookup_ertdb(Id) ->
 	process_info(extend104_hub:lookup_ertdb(Id), [memory, message_queue_len,heap_size,total_heap_size]).	
 	
-client_info(Cid) ->
+lookup_emqtt(Cid) ->
 	case extend104:get_conn_pid(list_to_integer(Cid)) of
 		{ok, ConnPid} ->
 			process_info(ConnPid,[memory, message_queue_len,heap_size,total_heap_size]);
 		error ->
 			no_conn
 	end.
+
+lookup_emqtt_state(Cid) ->
+	case extend104:get_conn_pid(list_to_integer(Cid)) of
+		{ok, ConnPid} ->
+			sys:get_status(ConnPid);
+		error ->
+			no_conn
+	end.	
 	
 
 % test

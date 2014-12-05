@@ -217,7 +217,7 @@ handle_monitor({monitor, Cid, Data}=Payload, #state{channel=Channel}) ->
 	NodeId = master:get_queue(monitor, CityId),
 	% ?ERROR("get nodeid:~p", [NodeId]),
 	with_monitor(Cid, fun(undefined) -> ?ERROR("has already monitor, no reply:~p", [Cid]);
-						(Node) -> ?ERROR("has already monitor, send again:~p, in ~p", [Cid, Node]),
+						(Node) -> ?INFO("has already monitor, send again:~p, in ~p", [Cid, Node]),
 								amqp:send(Channel, Node, Payload2) end, 
 			fun() -> 
 				case NodeId of
@@ -275,7 +275,7 @@ update_channel(Cid, Info) ->
         {ok, [_Record|_]} ->
             case emysql:update(channels, [{updated_at, DateTime} | Info], {id, Cid}) of
                 {error, Reason} ->
-                    ?ERROR("update :~p, ~n Reason: ~p", [Info, Reason]);
+                    ?INFO("update :~p, ~n Reason: ~p", [Info, Reason]);
                 _ ->
                     ok
              end;
@@ -292,7 +292,7 @@ with_monitor(Cid, F) ->
 with_monitor(Cid, F, E) ->
 	case mnesia:dirty_read(dispatch, {monitor, Cid}) of
         [] ->
-			?ERROR("unmonitor: ~p", [{monitored, Cid}]),
+			?INFO("unmonitor: ~p", [{monitored, Cid}]),
             E();
         [#dispatch{node = Node}] ->
             F(Node)

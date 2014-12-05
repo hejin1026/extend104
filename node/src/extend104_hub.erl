@@ -8,7 +8,7 @@
 -include("extend104.hrl").
 -include_lib("elog/include/elog.hrl").
 
--export([start_link/2, name/1,get_pid/0,
+-export([start_link/2, name/1,get_pid/0, info/0,
 		config/2,lookup/1, lookup_ertdb/1,
         send_datalog/1,
 		stop/0]).
@@ -22,7 +22,7 @@
         terminate/2,
         code_change/3]).
 
--record(state, {id, channel, ertdb}).
+-record(state, {id, channel, ertdb, buffer, queue}).
 
 -record(last, {key, type, ptype, coef, time, value}).
 
@@ -33,10 +33,13 @@
 %% Description: Starts the server
 %%--------------------------------------------------------------------
 start_link(Id, Config) ->
-    gen_server:start_link({local, name(Id)}, ?MODULE, [Id, Config], []).
+    gen_server:start_link({local, name(Id)}, ?MODULE, [Id, Config], [{priority, high}]).
 
 name(Id) ->
 	list_to_atom( lists:concat([?MODULE, "_", Id]) ).	
+	
+info() ->
+	[gen_server:call(Pid, info) || Pid <- pg2:get_members(?MODULE)].	
 	
 get_pid() ->
 	pg2:get_closest_pid(?MODULE).	
@@ -60,6 +63,7 @@ stop() ->
 
 init([Id, Config]) ->
     ?INFO("Monet hub is starting...[done]", []),
+	process_flag(trap_exit, true),
 	case ets:info(last, named_table) of
 		undefined ->
 			ets:new(last, [public, set, protected, named_table, {keypos, #last.key}]);
@@ -70,12 +74,18 @@ init([Id, Config]) ->
     Channel = open(Conn),
 	pg2:create(?MODULE),
 	pg2:join(?MODULE, self()),
+	{ok, HubConfig} =  application:get_env(hub), 
+	Buffer = proplists:get_value(buffer, HubConfig),
 	{ok, Client} = ertdb_client:start_link(Config),
-    {ok, #state{id=Id, channel = Channel, ertdb=Client}}.
+    {ok, #state{id=Id, channel = Channel, ertdb=Client, buffer=Buffer, queue=[]}}.
 
 open(Conn) ->
     {ok, Channel} = amqp:open_channel(Conn),
     Channel.
+
+handle_call(info, _From, #state{ertdb=Client}=State) ->
+	Reply = [extend104_util:pinfo(self()), extend104_util:pinfo(Client)],
+	{reply, Reply, State};
 
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
@@ -158,51 +168,19 @@ handle_cast(Msg, State) ->
 
 
 %% for emqtt test
-handle_info({measure, Cid, DateTime, DataList}, #state{channel = Channel, ertdb=Client} = State) ->
-	?INFO("get measure data:~p,~p", [Cid, DataList]),
-	lists:foreach(fun({Key, Value}) ->
+handle_info({measure, Cid, DateTime, DataList}, #state{channel=Channel, ertdb=Client} = State) ->
+	?INFO("get measure data:~p,~p", [Cid, DataList]),		
+	case Cid of
+		"1000" ->
+			?ERROR("get measure data:~p,~p", [Cid, DataList]);
+		_ ->
+			ok
+	end,			
+	Cmds = lists:map(fun({Key, Value}) ->
 		% Key = build_key(Cid, 11, No),
-		Cmd = ["insert", Key, DateTime, extbif:to_list(Value)],
-		ok = ertdb_client:q_noreply(Client, Cmd),
-		
-		%% for stat
-	    case ets:lookup(last, Key) of
-		    [#last{type=Type, ptype=Ptype, coef=Coef, time=LastTime, value=LastValue} = Config] -> 
-				if(LastTime == undefined) ->
-					?INFO("insert first:~p,~p", [Value, Config]),
-					ets:insert(last, Config#last{time=DateTime, value=Value});	
-				true ->
-					Interval = DateTime - LastTime,
-					if Interval > 0 ->
-						try format_value(Type, Coef, Interval, LastValue, Value) of
-							{insert, Value} ->
-								?INFO("insert value:~p, ~p", [Value, Config]),
-								ets:insert(last, Config#last{time=DateTime, value=Value}),
-								%% 改统计方式，脚本统计
-								% Datalog = [{ekey, Key},{station_id, Tid},{ptype, Ptype},
-									% {time, extbif:datetime(DateTime)},{value, Value}],
-								% amqp:send(Channel, <<"measure.datalog">>, term_to_binary({datalog, Key, Datalog}));
-								StatKey = list_to_binary([Key, ":stat"]),
-								StatCmd = ["insert", StatKey, DateTime, extbif:to_list(Value)],
-								ertdb_client:q_noreply(Client, StatCmd);
-								
-							insert ->
-								ets:insert(last, Config#last{time=DateTime, value=Value});	
-							ignore ->
-								?WARNING("ignore value:~p, ~p", [Value, Config])
-			            catch
-			                _:Err ->
-			                    ?ERROR("err: ~p, type: ~p, key: ~p, ~p", [Err, Type, Key, erlang:get_stacktrace()]),
-			                    []
-			            end;			
-					true ->
-						?WARNING("~p: interval < 0", [Key])
-					end
-				end;					
-		    [] -> ok
-	    end
-		
+		["insert", Key, DateTime, Value]
 	end, DataList),
+	ertdb_client:qp_noreply(Client, Cmds),
     {noreply, State};
 
 handle_info(Info, State) ->

@@ -13,21 +13,28 @@ run() ->
 	{ok, Offset} = application:get_env(inter, cid_offset),  
 	?ERROR("start run portn:~p", [PortNum]),
 	spawn(fun() -> 
-		lists:foreach(fun(N) ->
-			PortN = Port+N,
-			inter:go([{ip, Host}, {port, PortN}, {id, lists:concat([Host, "/", PortN])}]),
-			send_data(Host, PortN, Offset, ConnNum)
-			
-		end,lists:seq(0, PortNum-1)),
+		try
+			lists:foreach(fun(N) ->
+				PortN = Port+N,
+				inter:go([{ip, Host}, {port, PortN}, {id, lists:concat([Host, "/", PortN])}]),
+				?ERROR("send, port:~p, conn:~p", [PortN, ConnNum]),
+				send_data(Host, PortN, Offset, ConnNum)
+			end,lists:seq(0, PortNum-1))
+		catch
+			_:Err -> ?ERROR("send error: ~p, ~p", [Err, erlang:get_stacktrace()])
+		end,	
 	    ?ERROR("finish run conn:~p", [ConnNum])
 	end).	
         
 send_data(Host, Port, Offset, ConnNum) ->	
-	lists:foreach(fun(N) ->
+lists:foreach(fun(N) ->
 		Cid = Offset + (Port - 1883) * ConnNum + N,
-		% ?ERROR("send, port:~p, conn:~p", [Port, Cid]),
+		?INFO("send, port:~p, conn:~p", [Port, Cid]),
 		inter:send_data([{id, Cid},{ip, Host}, {port, Port}])
 	end,lists:seq(1, ConnNum)).
+
+lookup_inter(Cid) ->
+	ets:lookup(inter_interval, list_to_integer(Cid)).	
 	
 lookup_data(Cid) ->
 	inter:lookup_data(list_to_integer(Cid)).	

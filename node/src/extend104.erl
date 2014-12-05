@@ -70,7 +70,7 @@ handle_connect(emqtt_client, ConnConf, #state{map_cid_pid=MapCP, channel = Chann
 	Cid = get_cid(ConnConf),
     case emqtt_client:start_link(ConnConf) of
         {ok, ConnPid} ->
-			?ERROR("add mqtt cid:~p", [Cid]),
+			?INFO("add mqtt cid:~p", [Cid]),
 			emqtt_client:subscribe(ConnPid, {lists:concat(["measure/",Cid]), 1}),
 			emqtt_client:consume(ConnPid, extend104_hub:get_pid()),
 			handle_status(Channel, Cid, connected),

@@ -36,7 +36,8 @@ start_link(CityId) ->
 	supervisor:start_child(Sup, Monitor2),
 	
 	{ok, Config} = application:get_env(ertdb), 
-	{ok, PoolSize} =  application:get_env(ertdb_pool), 
+	{ok, HubConfig} =  application:get_env(hub), 
+	PoolSize = proplists:get_value(pool, HubConfig),
 	lists:foreach(fun(Id) ->
 	    Hub = {extend104_hub:name(Id), {extend104_hub, start_link, [Id, Config]},
 				permanent, 10, worker, [extend104_hub]},
