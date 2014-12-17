@@ -41,6 +41,10 @@ lookup_data(Cid) ->
 	
 lookup_value(Key) ->
 	inter:lookup_value(Key).		
+	
+lookup_emqtt(Ip, Port) ->
+	Pid = inter:lookup_emqtt(Ip, list_to_integer(Port)),
+	process_info(Pid, [registered_name, memory, message_queue_len,heap_size,total_heap_size]).
 
 process(Process) ->
     io:format("porcess info:~p",[process_info(whereis(list_to_atom(Process)),

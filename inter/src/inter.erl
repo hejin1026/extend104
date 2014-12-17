@@ -5,7 +5,7 @@
 
 -behavior(gen_server).
 
--export([start_link/0, go/1, send_data/1, save_data/2,
+-export([start_link/0, go/1, send_data/1, save_data/3, lookup_emqtt/2,
 	 	lookup_inter/1, lookup_data/1, lookup_value/1]).
 
 -export([init/1, 
@@ -19,7 +19,7 @@
 
 		
 start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], [{spawn_opt, [{min_heap_size, 204800}]}]).
 	
 go(Config) ->
 	gen_server:call(?MODULE, {go, Config}).	
@@ -27,8 +27,8 @@ go(Config) ->
 send_data(Channel) ->
 	gen_server:call(?MODULE, {send_data, Channel}).		
 	
-save_data(Cid, Data) ->
-	gen_server:cast(?MODULE, {save_data, Cid, Data}).	
+save_data(Cid, Data, Channel) ->
+	gen_server:cast(?MODULE, {save_data, Cid, Data, Channel}).	
 
 lookup_inter(Cid) ->
 	ets:lookup(inter_interval, Cid).	
@@ -38,6 +38,9 @@ lookup_data(Cid) ->
 	
 lookup_value(Key) ->
 	ets:lookup(inter_recv, Key).	
+	
+lookup_emqtt(Ip, Port) ->
+	gen_server:call(?MODULE, {lookup_emqtt, Ip, Port}).	
 			
 init([]) ->
 	process_flag(trap_exit, true),
@@ -47,6 +50,11 @@ init([]) ->
 	{ok, Num} = application:get_env(key_num),
 	{ok, Interval} = application:get_env(interval),
     {ok, #state{channel = dict:new(), num=Num, interval=Interval}}.
+	
+handle_call({lookup_emqtt, Ip, Port}, _From, State=#state{channel=CS}) ->
+	?INFO("lookup emqtt:~p,~p", [Ip, Port]),
+	EmqttC = dict:fetch({Ip, Port}, CS),
+	{reply, EmqttC, State};	
 	
 	
 handle_call({go, Config}, _From, State=#state{channel=CS}) ->
@@ -73,8 +81,9 @@ handle_call(Req, _From, State) ->
     {reply, ok, State}.
 
 
-handle_cast({save_data, Cid, Data}, State) ->
+handle_cast({save_data, Cid, Data, Channel}, State=#state{interval=Interval} ) ->
 	ets:insert(inter_channel, {Cid, Data}),
+	erlang:send_after(Interval * 1000, self(), {send_data, Channel}),
 	{noreply, State};
 
 handle_cast(Msg, State) ->
@@ -89,13 +98,13 @@ handle_info({send_data, Channel}, State=#state{channel=CS, num=Num, interval=Int
 	Port = proplists:get_value(port, Channel),
 	EmqttC = dict:fetch({Ip, Port}, CS),
 	spawn(fun() ->
-        try send_data(EmqttC, Cid, Num) 
+        try send_data(EmqttC, Cid, Num, Channel) 
         catch
             _:Error ->
                 ?ERROR("run_catch : ~p ~n Task: ~p ~n ~p", [Error, Channel, erlang:get_stacktrace()])
         end
 	end),
-	erlang:send_after(Interval * 1000, self(), {send_data, Channel}),
+	% erlang:send_after(Interval * 1000, self(), {send_data, Channel}),
 	{noreply, State};
 
 handle_info({measure, Cid, DateTime, DataList}, State) ->
@@ -122,7 +131,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-send_data(C, Cid, Num) ->
+send_data(C, Cid, Num, Channel) ->
 	Topic = lists:concat(["measure/",Cid]),
 	
 	% DateTime = {datetime, calendar:local_time()},
@@ -138,8 +147,7 @@ send_data(C, Cid, Num) ->
 	emqtt_client:publish(C, {Topic, 1, Message }),
 	% delete_data(Cid),
 % 	save_data(Data2),
-	
-	inter:save_data(Cid, Data2).
+	inter:save_data(Cid, Data2, Channel).
 
 delete_data(Cid) ->
 	?INFO("delete cid:~p", [Cid]),

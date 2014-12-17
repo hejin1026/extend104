@@ -155,7 +155,10 @@ handle_info({status, Cid, Connect} = Payload, #state{channel = Channel, map_cid_
 	
 handle_info({'EXIT', Pid, Reason}, #state{map_cid_pid = MapCP} = State) ->
 	?ERROR("unormal exit message received: ~p, ~p", [Pid, Reason]),
-	{noreply, State};	
+	NewMapCP = dict:filter(fun({Key, Value}) ->
+			Value == Pid
+		end, MapCP),
+	{noreply, State#state{map_cid_pid = NewMapCP} };	
 	
 handle_info(Msg, State) ->
 	?ERROR("unext msg:~p", [Msg]),

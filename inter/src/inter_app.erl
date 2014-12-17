@@ -7,7 +7,7 @@
 
 -export([start/2, stop/1]).
 
--define(APP, [crypto, lager, ranch, cowlib, cowboy, emysql, inter] ).
+-define(APP, [crypto, lager, ranch, cowlib, cowboy, inter] ).
 
 %% ===================================================================
 %% Application callbacks
@@ -21,7 +21,7 @@ start_app(App) ->
     ok = application:start(App).	
 	
 stop() ->
-	[start_app(App) || App <- lists:reverse(?APP)].
+	[stop_app(App) || App <- lists:reverse(?APP)].
 
 stop_app(App) ->
 	ok = application:stop(App).	

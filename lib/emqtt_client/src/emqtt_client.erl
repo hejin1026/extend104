@@ -106,7 +106,7 @@ init([Args]) ->
 			{stop, {connection_error, Reason}}
 	end.
 
-do_connect(Cid, Addr, Port) ->
+do_connect(Usename, Possword, Cid, Addr, Port) ->
     case gen_tcp:connect(Addr, Port, ?TCPOPTIONS) of
         {ok, Sock}     -> 
 			Fixed =  #mqtt_frame_fixed{type 	 = ?CONNECT},
@@ -175,12 +175,12 @@ handle_cast({publish, {Topic, Qos, Payload}}, #state{socket = Sock, message_id=M
 		payload = term_to_binary(Payload)},
 
 	send_frame(Sock, Frame),
-	State1 = State#state{msg = dict:store(MsgId, Frame, Msg)},
+	% State1 = State#state{msg = dict:store(MsgId, Frame, Msg)},
 	if
 	Qos == ?QOS_0 ->
-		{noreply, State1};
+		{noreply, State};
 	true ->
-		{noreply, next_msg_id(State1)}
+		{noreply, next_msg_id(State)}
 	end;
 
 		   
@@ -194,7 +194,7 @@ handle_cast(Msg, State) ->
 handle_info({inet_reply, _Ref, ok}, State) ->
     {noreply, State, hibernate};
 
-handle_info({tcp, Sock, Data}, #state{ socket = Sock}=State) ->
+handle_info({tcp, Sock, Data}, #state{ socket = Sock, connection_state=running}=State) ->
     process_received_bytes(Data, run_socket(State #state{ await_recv = false }));
 
 
